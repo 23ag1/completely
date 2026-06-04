@@ -60,6 +60,13 @@ cmpl setup --install            # install missing deps via their real channels
 cmpl setup --install --dry-run  # preview the exact commands first
 ```
 
+| Dependency | Required? | Install command |
+|---|---|---|
+| **Beads** (`bd`) | **yes** — the spine | `npm i -g @beads/bd` · `brew install beads` |
+| GSD | optional — planning | `npx get-shit-done-cc --global` |
+| claude-mem | optional — memory | `claude plugin install claude-mem@thedotmack` |
+| ralph-loop | optional — *not used by the loop* | `claude plugin install ralph-loop@claude-plugins-official` |
+
 Then, in any repo:
 
 ```bash

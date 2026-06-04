@@ -36,8 +36,8 @@ present() {  # echo version if installed, empty if absent (CMP_FAKE_MISSING forc
 }
 hint() {
   case "$1" in
-    bd)         echo "brew install beads | npm i -g @beads/bd | github.com/steveyegge/beads" ;;
-    gsd)        echo "manual — TACHES get-shit-done (no verified plugin channel)" ;;
+    bd)         echo "brew install beads | npm i -g @beads/bd | github.com/gastownhall/beads" ;;
+    gsd)        echo "npx get-shit-done-cc --global  (TACHES, npm)" ;;
     ralph)      echo "claude plugin install ralph-loop@claude-plugins-official" ;;
     claude-mem) echo "claude plugin install claude-mem@thedotmack" ;;
   esac
@@ -57,7 +57,9 @@ install_one() {
     ralph)
       if command -v claude >/dev/null 2>&1; then run "claude plugin install ralph-loop@claude-plugins-official"
       else echo "    claude CLI not found → $(hint ralph)"; fi ;;
-    gsd) echo "    gsd: $(hint gsd)" ;;
+    gsd)
+      if command -v npx >/dev/null 2>&1; then run "npx get-shit-done-cc --global"
+      else echo "    npx (node) not found → $(hint gsd)"; fi ;;
   esac
 }
 
