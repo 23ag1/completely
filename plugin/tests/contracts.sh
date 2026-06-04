@@ -64,6 +64,16 @@ printf '# P\n<tasks>\n<task type="auto"><name>T</name><files>a</files><action>x<
 [ "$rc" = 3 ] && ok "quarantined emit refuses (exit 3)" || no "quarantined emit refuses (got $rc)"
 rm -rf "$ST" "$DQ"
 
+echo "== cmp check (concise output) =="
+D=$(mktmp)
+printf '[check]\ncommands = [ { name = "ok", cmd = "true" }, { name = "bad", cmd = "echo E123; exit 1" } ]\n' > "$D/completely.toml"
+bash "$ROOT/scripts/check.sh" "$D" >/tmp/cmpcc.out 2>&1; rc=$?
+{ [ "$rc" = 1 ] && grep -q '✗ bad' /tmp/cmpcc.out && grep -q E123 /tmp/cmpcc.out && ! grep -q '✗ ok' /tmp/cmpcc.out; } \
+  && ok "check fails, shows only failing output" || no "check fail-path"
+printf '[check]\ncommands = [ { name = "ok", cmd = "true" } ]\n' > "$D/completely.toml"
+bash "$ROOT/scripts/check.sh" "$D" >/dev/null 2>&1 && ok "check clean -> exit 0" || no "check clean exit"
+rm -rf "$D" /tmp/cmpcc.out
+
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
 skip "two independent streams actually spawn in parallel"

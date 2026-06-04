@@ -1,0 +1,32 @@
+# completely — project config. Edit to customize the pipeline. Everything has a sane default,
+# so this file is optional; with no [check] table the stack is auto-detected (front + back).
+
+[project]
+name = ""
+kind = ""            # "new" | "existing" (set by /completely:init)
+
+[stack]
+frontend = "auto"    # auto | react | next | vue | svelte | ...
+backend  = "auto"    # auto | fastapi | django | express | go | ...
+
+[architecture]
+frontend = ""        # fsd | feature-based | atomic | (blank = let init choose best)
+backend  = ""        # modular-monolith | layered | hexagonal | (blank = init chooses)
+
+# Quality checks run by `cmp check`, in order. Omit this table to auto-detect.
+# [check]
+# commands = [
+#   { name = "ruff",   cwd = "backend",  cmd = "ruff check ." },
+#   { name = "mypy",   cwd = "backend",  cmd = "mypy app" },
+#   { name = "pytest", cwd = "backend",  cmd = "pytest -q" },
+#   { name = "eslint", cwd = "frontend", cmd = "npx eslint ." },
+#   { name = "tsc",    cwd = "frontend", cmd = "npx tsc --noEmit" },
+#   { name = "vitest", cwd = "frontend", cmd = "npx vitest run" },
+# ]
+
+[skills]
+# Pin the canonical skill per intent (overrides core/routing.md). Your own skills win here.
+# prefer = { review = "code-reviewer", plan = "gsd:plan-phase", tdd = "tdd" }
+
+[tools]
+# lazy = true        # rely on progressive disclosure; load heavy tool surfaces on demand
