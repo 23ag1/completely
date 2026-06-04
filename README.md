@@ -1,96 +1,109 @@
-# claude-harness
+# completely
 
-> **Agent = Model + Harness.** This is the *harness* — the stuff around the model that
-> makes it hard for an agent to quietly cut a corner, fake "done", or silently ship a stub.
-> Stack-agnostic. Built for Claude Code; the file formats (`SKILL.md`, `AGENTS.md`, hooks)
-> are open standards other agents read too.
+**Make a coding agent hard to lie to you.** `completely` turns *"the agent said it's done"* into
+*"here's the proof, graded by an independent checker"* — and fuses **GSD** (planning), **Ralph**
+(autonomous loop), and **Beads** (memory) into one install with quality and safety gates baked in.
 
-## Why
+Short CLI: **`cmpl`**. Slash commands: **`/completely:*`**.
 
-Agents fail in predictable ways: they lose context, claim work is done without proof,
-disable a failing test, or downscope a tool into a stub without telling you. You don't fix
-that by *asking nicely in a prompt* — you fix it by **engineering the environment** so the
-failure can't happen the same way again. Three structural moves:
+---
 
-1. **Quality is deterministic, not trusted.** Format/lint/typecheck run automatically via
-   hooks after every edit and feed failures back to the agent. It can't "forget".
-2. **"Done" requires evidence.** A read-only `evaluator` agent grades against a Definition
-   of Done where **every criterion starts FAIL** and only flips to PASS with proof (command
-   output, a passing test, a file). Agents systematically over-grade themselves; this catches it.
-3. **No silent stubs.** A self-tooling contract forbids downscoping. "Minimal version" is
-   only allowed via an explicit `blocked` return with a reason — never quietly.
+## The problem this solves
+
+Coding agents fail in the same boring ways, and a longer `CLAUDE.md` doesn't fix it (an essay
+nobody executes):
+
+- claim **"done"** without actually running anything;
+- quietly **downscope** a tool into a stub;
+- **disable a failing test** to go green;
+- **lose context** between sessions — redo or forget work;
+- you stack GSD + Ralph + Beads and they **fight** (three task queues, drift, no single truth).
+
+`completely` fixes these *structurally* — by engineering the environment so they can't happen —
+instead of asking nicely in a prompt.
+
+## Before → after
+
+| Without | With `completely` |
+|---|---|
+| "I ran the tests, all green" *(no output)* | acceptance **proven by evidence in Beads**, graded by a read-only **default-FAIL evaluator** |
+| you hope edits were linted | a hook lints/type-checks **every edit**; `cmpl check` runs all checks in **one terse pass** |
+| `rm -rf`, force-push slip through | a guard hook **blocks** them (exit 2) |
+| GSD todos + Ralph plan + Beads = **3 queues** | **one spine** (Beads); GSD plans → `cmpl emit`; the loop drives `bd ready` |
+| "minimal version" stub, silently | **no-stub contract** — downscope only via an explicit `blocked` |
+| an upstream update breaks your wiring | `cmpl doctor` **quarantines** on drift; `cmpl update` re-syncs — no step breaks |
+
+## What you get (one install)
+
+- **Spine** — Beads holds status, memory (comments/notes/`remember`), and coordination.
+- **Planning** — GSD (discuss → plan → plan-checker), emitted into Beads with `cmpl emit`.
+- **Execution** — *one engine, two modes*: **supervised** (GSD wave subagents) or **unattended**
+  (Ralph-style fresh-context loop), both over `bd ready`. Pick the mode with the autonomy dial.
+- **Quality floor** — gate hooks (lint/types + dangerous-command block), a default-FAIL
+  `evaluator`, a worker-contract `cmpl lint`, and one-pass `cmpl check`.
+- **Adaptive** — frontend **and** backend in one system, detected automatically (no modes to pick).
+- **Upgrade-safe** — overlays (it never edits GSD/Ralph) + version drift quarantine.
 
 ## Install
-
-**As a Claude Code plugin (recommended):**
 
 ```bash
 claude plugin marketplace add 23ag1/completely
 claude plugin install completely@completely
 ```
 
-Then, inside any repo:
-
-```
-/completely:init
-```
-
-Short CLI (installed on PATH, like `bd` is to beads): `cmpl sync`, `cmpl doctor`.
-Slash commands: `/completely`, `/completely:init`, `/completely:sync`, `/completely:run`, `/completely:doctor`.
-
-…which scaffolds the project's thin layer (`Definition of Done`, a `CLAUDE.md` snippet,
-and an optional project-specific quality command).
-
-**Manual / non-plugin** (other tools, or no plugin system):
+Then, in any repo:
 
 ```bash
-git clone https://github.com/23ag1/completely && cd completely
-./install.sh --project /path/to/your/repo
+cmpl setup          # check upstreams (GSD/Ralph/Beads/claude-mem) + wire Beads
+/completely:init    # discovery: new vs existing, stack + architecture, scaffold the thin layer
+cmpl quality        # install a pre-commit gate (cmpl check) + starter lint configs
+cmpl check          # run all checks in one pass → "clean" or just the failure
+cmpl run --dry-run  # see the queue, then `cmpl run` to drive bd ready
 ```
 
-## What's inside
+**Manual / non-plugin:** `git clone https://github.com/23ag1/completely && cd completely && ./install.sh --project /path/to/repo`
 
-| Component | What it does | File |
-|---|---|---|
-| `quality-gate` hook | After every edit: format + lint (+ opt-in typecheck) on the changed file, by detected stack (TS/JS, Python, Go, Rust). Failures return to the agent. | `plugin/hooks/quality-gate.sh` |
-| `guard-dangerous` hook | Before every Bash call: blocks `rm -rf`, `DROP TABLE`, force-push, `mkfs`, fork-bombs, … (exit 2). | `plugin/hooks/guard-dangerous.sh` |
-| `evaluator` agent | Read-only, default-FAIL acceptance grader. No write tools — it can only judge. | `plugin/agents/evaluator.md` |
-| `Definition of Done` | Checklist where each item is FAIL until proven, output attached. | `plugin/templates/DEFINITION_OF_DONE.md` |
-| self-tooling contract | The no-silent-stub rule, for `CLAUDE.md`. | `plugin/core/self-tooling.md` |
-| `/completely:init` skill | Scaffolds the per-project thin layer. | `plugin/skills/init/` |
-| `cmpl` CLI + `cmpl sync` | Short CLI; idempotent markdown→Beads task migration. | `plugin/bin/cmpl`, `plugin/scripts/sync.sh` |
-| `cmpl doctor` | Upstream version-drift + overlay health check. | `plugin/scripts/doctor.sh`, `plugin/versions.lock` |
-| the principle | The full A→B→C→D flow, role-ownership map, STOP-conditions. | `plugin/core/HARNESS.md`, `plugin/core/roles.md` |
+## Command surface
 
-## How it fits with your other tools
+`cmpl` (short CLI):
 
-This harness is the **quality + verification layer**. It does **not** own planning or the
-task queue — it composes with whatever you use:
+| Command | Does |
+|---|---|
+| `cmpl check` | run all configured quality checks, one pass, terse output |
+| `cmpl lint` | enforce the worker-contract (acceptance+design+write-zone) on Beads tasks |
+| `cmpl sync` | migrate markdown task state → Beads (idempotent) |
+| `cmpl emit <PLAN.md>` | GSD plan → Beads epic + tasks (idempotent) |
+| `cmpl run` | drive `bd ready` — supervised (GSD) or unattended (Ralph) |
+| `cmpl setup` | verify upstreams + wire project Beads |
+| `cmpl quality` | scaffold pre-commit gate + lint configs |
+| `cmpl doctor` | upstream version drift + overlay quarantine |
+| `cmpl update` | re-check + re-sync after upstreams change |
+| `cmpl test` | run the contract regression suite |
 
-- **Planning** (specs, decomposition): your spec-driven flow (e.g. GSD, Spec Kit, plan mode).
-- **Task queue / memory**: a task tracker like Beads owns *status*; never track status in markdown.
-- **Execution loop**: a driver like Ralph, or GSD's executor — pick **one** per run.
-- **This harness**: gates + evaluator + DoD + the no-stub contract, underneath all of the above.
+Slash: `/completely` · `/completely:init` · `/completely:sync` · `/completely:run` · `/completely:check`
 
-See [`plugin/core/roles.md`](plugin/core/roles.md) for the full "who owns what" map and how to
-avoid double-ownership (the most common source of quiet bugs when stacking tools).
+## Configure
 
-## Scope
+A `completely.toml` (optional — sane defaults) lets you customize the pipeline without touching
+scripts: `[stack]`, `[architecture]`, `[check].commands`, `[skills].prefer`, `[tools].lazy`. Your
+own skills and rules compose *on top* — `completely` layers, it never overrides.
 
-- **v0.1 (this release):** the gates, evaluator, DoD, self-tooling contract, `/harness-init`.
-  A complete, usable quality+verification floor.
-- **v0.2 (planned):** `/harness-start` (full A→B→C→D orchestrator), `/harness-verify`
-  (evidence-based acceptance run), an optional MCP bundle (Context7 / Playwright).
+## How it fits with your tools
 
-## Caveats (read these)
+`completely` is the quality + verification + glue layer. It does **not** own your planning or task
+queue — it composes with them, routing everything through Beads. See
+[`docs/TOOL-COMPATIBILITY.md`](docs/TOOL-COMPATIBILITY.md) for the full design (per-tool detail,
+"who owns what", the two-modes engine, upgrade-safety) and [`plugin/core/`](plugin/core/) for the
+principle, roles, routing, architectures, token-economy, and adaptivity.
 
-- **Token cost.** The evaluator + reviewers cost multiples of a single session. Add a
-  fast-path for trivial edits; don't run the full ceremony on a typo.
-- **Hooks can be finicky.** If you hit invisible init failures, move a check into an explicit
-  command the agent calls itself.
-- **Models improve.** After a model upgrade, disable parts of the harness one at a time and
-  see what became dead weight.
-- **Ecosystem trust.** Install skills/MCP only from sources you trust; review before running.
+## Caveats
+
+- **Token cost.** Multi-agent verification costs multiples of a single session — keep a fast path
+  for trivial edits.
+- **The live autonomous loop** (`cmpl run` unattended) needs a real session to prove end-to-end;
+  every *deterministic* contract is covered by `cmpl test`.
+- **Hooks can be finicky** — prefer explicit `cmpl`/`bd` commands over fragile session hooks.
+- **Trust** — install skills/MCP only from sources you trust.
 
 ## License
 
