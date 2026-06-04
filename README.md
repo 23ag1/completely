@@ -26,14 +26,17 @@ failure can't happen the same way again. Three structural moves:
 
 ```bash
 claude plugin marketplace add 23ag1/completely
-claude plugin install harness@completely
+claude plugin install completely@completely
 ```
 
 Then, inside any repo:
 
 ```
-/harness-init
+/completely:init
 ```
+
+Short CLI (installed on PATH, like `bd` is to beads): `cmp sync`, `cmp doctor`.
+Slash commands: `/completely`, `/completely:init`, `/completely:sync`, `/completely:run`, `/completely:doctor`.
 
 …which scaffolds the project's thin layer (`Definition of Done`, a `CLAUDE.md` snippet,
 and an optional project-specific quality command).
@@ -54,7 +57,9 @@ git clone https://github.com/23ag1/completely && cd completely
 | `evaluator` agent | Read-only, default-FAIL acceptance grader. No write tools — it can only judge. | `plugin/agents/evaluator.md` |
 | `Definition of Done` | Checklist where each item is FAIL until proven, output attached. | `plugin/templates/DEFINITION_OF_DONE.md` |
 | self-tooling contract | The no-silent-stub rule, for `CLAUDE.md`. | `plugin/core/self-tooling.md` |
-| `/harness-init` skill | Scaffolds the per-project thin layer. | `plugin/skills/harness-init/` |
+| `/completely:init` skill | Scaffolds the per-project thin layer. | `plugin/skills/init/` |
+| `cmp` CLI + `cmp sync` | Short CLI; idempotent markdown→Beads task migration. | `plugin/bin/cmp`, `plugin/scripts/sync.sh` |
+| `cmp doctor` | Upstream version-drift + overlay health check. | `plugin/scripts/doctor.sh`, `plugin/versions.lock` |
 | the principle | The full A→B→C→D flow, role-ownership map, STOP-conditions. | `plugin/core/HARNESS.md`, `plugin/core/roles.md` |
 
 ## How it fits with your other tools

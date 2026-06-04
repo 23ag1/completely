@@ -8,9 +8,9 @@
   },
   "plugins": [
     {
-      "name": "harness",
+      "name": "completely",
       "source": "./plugin",
-      "description": "Deterministic quality-gate + dangerous-command guard hooks, a read-only default-FAIL evaluator agent, a Definition of Done, a self-tooling (no-silent-stub) contract, and /harness-init to scaffold any repo.",
+      "description": "Deterministic quality-gate + dangerous-command guard hooks, a read-only default-FAIL evaluator agent, a Definition of Done, a self-tooling (no-silent-stub) contract, the `cmp` CLI, idempotent md→Beads sync, and /completely:* slash commands.",
       "category": "workflow"
     }
   ]

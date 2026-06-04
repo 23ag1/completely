@@ -1,0 +1,5 @@
+# completely tested upstream versions (v0.2 baseline)
+bd=bd version 0.63.3 (884cc117: HEAD@884cc1171e3e)
+gsd=1.20.5
+ralph=7963c6a
+claude-mem=10.3.1

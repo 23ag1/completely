@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# cmp — the completely CLI (short form, like `bd` is to beads).
+# Wraps the harness shell tools. Slash equivalents: /completely:<cmd>.
+set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # plugin root
+S="$ROOT/scripts"
+cmd="${1:-help}"; [ $# -gt 0 ] && shift || true
+case "$cmd" in
+  sync)   exec bash "$S/sync.sh" "$@" ;;
+  doctor) exec bash "$S/doctor.sh" "$@" ;;
+  init)   echo "cmp: run /completely:init inside Claude Code to scaffold this repo." ;;
+  run)    echo "cmp: run /completely:run inside Claude Code (GSD supervised | Ralph unattended)." ;;
+  update) if [ -f "$S/update.sh" ]; then exec bash "$S/update.sh" "$@"; else echo "cmp update: planned (bd: harness-update)"; fi ;;
+  version|-V|--version) echo "completely (cmp) v0.2 — quality-first agent harness" ;;
+  help|-h|--help)
+    cat <<'USAGE'
+completely — quality-first agent harness.  Short CLI: cmp
+
+  cmp sync [dir] [files...]  Migrate markdown task state -> Beads (idempotent)
+  cmp doctor                 Check upstream versions + overlay health
+  cmp init / run             (use /completely:init , /completely:run in Claude Code)
+  cmp update                 Re-pull upstreams, re-apply overlays, re-sync
+  cmp version
+
+Slash: /completely  /completely:init  /completely:sync  /completely:run  /completely:doctor
+USAGE
+    ;;
+  *) echo "cmp: unknown subcommand '$cmd' (try: cmp help)" >&2; exit 1 ;;
+esac

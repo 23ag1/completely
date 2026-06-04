@@ -1,6 +1,6 @@
 ---
-name: harness-init
-description: Scaffold the claude-harness thin layer into the current repository — Definition of Done, the harness rules snippet in CLAUDE.md, and an optional project-specific quality command. Use when setting up claude-harness in a new project, or when the user says "harness init", "set up the harness", or "wire up the quality gates here".
+name: completely:init
+description: Scaffold the completely thin layer into the current repository — Definition of Done, the harness rules snippet in CLAUDE.md, and an optional project-specific quality command. Use when setting up claude-harness in a new project, or when the user says "harness init", "set up the harness", or "wire up the quality gates here".
 version: 0.1.0
 user-invocable: true
 argument-hint: "[--force]"
