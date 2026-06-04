@@ -48,3 +48,13 @@ the user passed `--force`).
 - Do not invent commands — read them from the project's real config.
 - This is a self-tooling task: scaffold the FULL thin layer; if something blocks it, return
   `blocked` with the reason — do not silently skip a piece.
+
+## Compose with the user's own skills/rules (never override)
+DETECT and LAYER — do not clobber:
+- If the repo has a `CLAUDE.md`, APPEND the harness rules between `<!-- claude-harness -->`
+  markers (idempotent). Keep the user's content; harness hard-invariants on top, project rules
+  below. Never replace the file.
+- Leave the user's existing `~/.claude` skills/agents untouched; compose via `core/routing.md`,
+  treating user skills as first-class for their intents.
+- If a user skill already covers an intent (e.g. their own `/review`), PREFER it over the
+  harness default and record the choice in routing. Hierarchy, not replacement.

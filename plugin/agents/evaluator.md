@@ -46,3 +46,14 @@ A table, then a verdict.
 
 **Verdict:** ACCEPTED only if every row is PASS. If any row is FAIL → **REJECTED**, and list
 the specific, minimal actions needed to reach PASS. Never round up. A single FAIL = REJECTED.
+
+## Beads acceptance-gate mode (single gate)
+When the task lives in Beads, you ARE the one acceptance gate:
+1. Read the task: `bd show <id> --json` → its `acceptance_criteria` are the criteria (default-FAIL).
+2. Read the evidence: `bd comments <id>` — the implementer must have posted the verify command
+   AND its output. **No evidence comment → automatic FAIL.**
+3. Re-run the verify command yourself where possible; compare against the posted output.
+4. `gsd-verifier` (goal-backward) may add evidence — treat its report as INPUT, not the verdict.
+5. Write the verdict as a comment: `bd comment <id> "EVALUATOR: ACCEPTED|REJECTED — <table>"`.
+   Only ACCEPTED permits `bd close`. A single FAIL → REJECTED + the minimal actions to reach PASS.
+"Done" = evidence in Beads, checked by an independent read-only agent — not the implementer's say-so.
