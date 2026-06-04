@@ -8,6 +8,7 @@ cmd="${1:-help}"; [ $# -gt 0 ] && shift || true
 case "$cmd" in
   sync)   exec bash "$S/sync.sh" "$@" ;;
   doctor) exec bash "$S/doctor.sh" "$@" ;;
+  setup)  exec bash "$S/bootstrap.sh" "$@" ;;
   init)   echo "cmp: run /completely:init inside Claude Code to scaffold this repo." ;;
   run)    exec bash "$S/run.sh" "$@" ;;
   update) if [ -f "$S/update.sh" ]; then exec bash "$S/update.sh" "$@"; else echo "cmp update: planned (bd: harness-update)"; fi ;;
