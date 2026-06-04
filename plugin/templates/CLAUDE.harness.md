@@ -18,3 +18,7 @@
 - Test:       `<e.g. pytest  |  vitest run>`
 - Quality gate (all): `<e.g. scripts/check.sh>`
 <!-- ===== end claude-harness ===== -->
+
+## Best-practice rules (completely)
+Follow the focused rule files (installed under the plugin's `rules/`):
+immutability · file-organization · error-handling · input-validation · testing · security.
