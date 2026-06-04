@@ -112,3 +112,63 @@ Rules that fall out of this:
 - Token cost compounds (GSD ~4:1 × multi-agent ~15×). Keep a fast-path for trivial work.
 - GSD, Ralph, Beads are young and move fast; adapters must be thin and re-pointable.
 - After a model upgrade, re-test whether some of this scaffolding became dead weight.
+
+---
+
+## 8. Field report: "orchestrator = contract dispatcher" (Maslennikov, Habr)
+
+A practitioner running the same stack (Beads + Superpowers, then a Codex port) independently
+hit and solved our exact problems. His conclusions sharpen the target design above.
+
+**Root cause, confirmed.** "The orchestrator confidently reads the contract, nods, then
+quietly cuts corners." A vague contract gives the agent freedom to reinterpret
+("delegate medium/complex" → "delegate only when I'm unsure"), and on average it takes the
+easier path. **One big AGENTS.md/CLAUDE.md is an essay, not a contract — nobody executes an
+essay.** (A commenter's fix: keep the root file for hard invariants only; move modular
+contracts into folders + slash-commands so a contract loads only when its context is active.)
+→ Validates: our gates must be *structural*, and the v0.2 orchestrator must be small
+contextual contracts + machine-readable config, **not** a growing CLAUDE.md.
+
+**Mechanisms worth adopting (for v0.2, not now):**
+
+1. **Lifecycle-split skills**, not one prompt: `setup` (repo baseline) · `stage` (active
+   medium/complex work) · `router` (asset/skill/agent routing within a step) · **`closeout`**
+   (evidence-checks, update Beads/handoff, clean worktrees). He calls closeout the most
+   valuable — "stage can't close without passing evidence-checks; silent debt ended."
+   → This is exactly our `evaluator`/DoD, but lifted to a *stage* gate that also cleans state.
+2. **Parallel Decomposition Matrix** — a mandatory table *before* delegating: Stream · Goal ·
+   Agent · **Write zone** · Dependencies · Verification · Model · Decision · Reason. Rule:
+   ≥2 independent streams ⇒ run parallel; sequential needs a reason from an *enumerated* list
+   (dependency chain, write conflict, shared verification bottleneck, shared external
+   resource, uncertain scope, repo limit). **"Files are related" is not on the list.**
+   → Compensates GSD/Ralph "decorative parallelism" (claims parallel, runs sequential).
+3. **Machine-readable contract** (`orchestrator.toml`): `inline_subagents_allowed = false`,
+   `parallel_decomposition_matrix = "required_for_medium_complex"`, model policy, etc.
+   Plus an explicit per-task **spawn authorization** phrase, because the runtime obeys the
+   *user in the current session*, not the repo file.
+4. **Worker contract fields each close one silent-failure class:** write zone (don't touch a
+   sibling's files), stop rules (return `blocked`, don't redesign), verification (don't claim
+   without running), asset routing (don't re-discover), parallel group (know you're not alone).
+   → Confirms our task-contract template; adopt verbatim.
+5. **Completion ≠ acceptance**, 4-way: completion event · artifact · orchestrator review ·
+   local verification. `accepted: yes` is illegal without verification evidence (the exact
+   command + output), re-checked at closeout. → Sharpen our DoD: the artifact must *record*
+   the verification command and its output, not assert "green".
+
+**A caveat that changes our conflict E + the hooks design:** he **removed his Beads hooks**
+("worked yesterday, not today" — init order, worktrees, approval mode) and went to **explicit
+`bd ready/create/update --claim` commands**: less hidden behavior, portable, explainable.
+→ Important distinction for us: this applies to **stateful/session hooks** (auto-priming
+Beads on SessionStart) — prefer explicit `bd` calls there. It does **not** condemn our
+**deterministic gate hooks** (PostToolUse lint, PreToolUse guard), which are idempotent and
+don't depend on session state. Design rule: **hooks for deterministic gates; explicit commands
+for state.** Also reinforces dropping Ralph's blanket `--dangerously-skip-permissions`.
+
+**Future direction he names — and we should steal:** *behavioral / pressure tests for the
+orchestrator* ("TDD for the process"): give a medium/complex task → assert it built the matrix;
+give two independent subtasks → assert it actually spawned them in parallel; submit a completion
+with no evidence → assert closeout rejected it. Tests for the *contracts*, not the model — to
+find where the agent still slips through. This is the natural QA layer for this harness.
+
+Source: Игорь Масленников, "Собрал оркестратор для Codex на базе Beads и Superpowers", Habr
+(baseline `balanced-v2.12`). Same author the original blueprint cited on hook flakiness.

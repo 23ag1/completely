@@ -25,8 +25,8 @@ failure can't happen the same way again. Three structural moves:
 **As a Claude Code plugin (recommended):**
 
 ```bash
-claude plugin marketplace add <you>/claude-harness
-claude plugin install harness@claude-harness
+claude plugin marketplace add 23ag1/completely
+claude plugin install harness@completely
 ```
 
 Then, inside any repo:
@@ -41,7 +41,7 @@ and an optional project-specific quality command).
 **Manual / non-plugin** (other tools, or no plugin system):
 
 ```bash
-git clone https://github.com/<you>/claude-harness && cd claude-harness
+git clone https://github.com/23ag1/completely && cd completely
 ./install.sh --project /path/to/your/repo
 ```
 
