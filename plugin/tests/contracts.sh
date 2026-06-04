@@ -74,6 +74,18 @@ printf '[check]\ncommands = [ { name = "ok", cmd = "true" } ]\n' > "$D/completel
 bash "$ROOT/scripts/check.sh" "$D" >/dev/null 2>&1 && ok "check clean -> exit 0" || no "check clean exit"
 rm -rf "$D" /tmp/cmpcc.out
 
+echo "== plan-apply (Beads-first, no markdown) =="
+D=$(mktmp)
+printf '%s' '{"epic":"E","tasks":[{"key":"a","title":"A","acceptance":"x","design":"y","write_zone":["a"],"deps":[]},{"key":"b","title":"B","acceptance":"x","design":"y","write_zone":["b"],"deps":["a"]}]}' \
+  | ( cd "$D" && bash "$ROOT/scripts/plan.sh" >/dev/null 2>&1 )
+n1=$(count "$D")
+printf '%s' '{"epic":"E","tasks":[{"key":"a","title":"A","acceptance":"x","design":"y","write_zone":["a"],"deps":[]},{"key":"b","title":"B","acceptance":"x","design":"y","write_zone":["b"],"deps":["a"]}]}' \
+  | ( cd "$D" && bash "$ROOT/scripts/plan.sh" >/dev/null 2>&1 )
+n2=$(count "$D")
+{ [ "$n1" = "$n2" ] && [ "$n1" -ge 3 ]; } && ok "plan-apply idempotent ($n1->$n2)" || no "plan-apply idempotency ($n1->$n2)"
+( cd "$D" && bash "$ROOT/scripts/lint.sh" >/dev/null 2>&1 ) && ok "plan-apply tasks are lint-clean" || no "plan-apply lint"
+rm -rf "$D"
+
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
 skip "two independent streams actually spawn in parallel"
