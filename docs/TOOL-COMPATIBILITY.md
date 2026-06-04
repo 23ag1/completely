@@ -201,3 +201,60 @@ find where the agent still slips through. This is the natural QA layer for this 
 
 Source: Игорь Масленников, "Собрал оркестратор для Codex на базе Beads и Superpowers", Habr
 (baseline `balanced-v2.12`). Same author the original blueprint cited on hook flakiness.
+
+---
+
+## 9. Beads is the unified spine — a coordination substrate, not a queue
+
+`bd --help` (verified live) shows Beads already has the primitives GSD fakes in markdown and
+Ralph lacks. **Issue fields:** description, `acceptance`, `design`(+file), `notes`(+append),
+`metadata`(JSON), `labels`, typed deps (parent-child), types incl. `decision` (ADRs).
+**Commands:** `comment`/`comments`, `note`, `remember` (persists across sessions, injected at
+`bd prime`), `swarm` (parallel epic DAG), `merge-slot` (serialize write conflicts), `gate`
+(human/timer/gh:run/gh:pr/bead async waits), `set-state` (custom event-sourced state
+dimensions), `lint` (enforce required sections per type), `--readonly` (worker sandbox),
+`mol`/`formula`/`cook` (reusable work templates), `search`/`find-duplicates` (text/AI recall),
+`history`, `export`/`federation`/`dolt` (versioned, branchable, federated DB).
+
+### Everything-on-Beads mapping
+
+| Scattered today | Native Beads home |
+|---|---|
+| Ralph `PROGRESS.md` (per-task log) | `bd comment <task>` (append, `--stdin` for cmd output) + `bd note` |
+| GSD `.planning` plan rationale | issue `--design` (epic) + specs as linked files |
+| GSD `STATE.md` / todos / TodoWrite | issue `status` + `bd ready` |
+| claude-mem / MEMORY.md project facts | `bd remember [--key]` (injected at `bd prime`) |
+| claude-mem semantic "did we do this?" | `bd search` / `bd find-duplicates` |
+| DoD criteria | issue `--acceptance` + `bd lint` enforces the section |
+| Acceptance evidence | `bd comment` w/ verify cmd+output before `bd close`; `bd history` = audit |
+| Worker-contract machine fields (write-zone, model, autonomy) | issue `--metadata` JSON + labels |
+| Two human gates + STOP-conditions | `bd gate type=human` blocking the step |
+| CI / cross-project waits | `bd gate type=gh:run` / `gh:pr` / `bead` |
+| Parallel Decomposition Matrix (streams+deps) | `bd swarm` (epic DAG) |
+| Parallel write-zone conflicts | `bd merge-slot` (exclusive slot + waiter queue) |
+| `autonomy: supervised\|unattended` dial | `bd set-state mode=...` (event-sourced) |
+| Worker can't write outside its task | `bd --readonly` sandbox |
+| Reusable phase/task/DoD templates | `bd mol` molecules / `bd formula` |
+
+### The unified engine (everything routes through Beads)
+- **Plan (GSD's strength):** discuss→plan emits a **swarm** (epic + child tasks, deps,
+  write-zones in `metadata`, `acceptance` per task, rationale in `design`). `bd lint` rejects
+  tasks missing required sections — the worker-contract is enforced structurally.
+- **Drive (one engine, two modes — §4a):** consume `bd ready` within the swarm. Workers run
+  `--readonly` except their task; `merge-slot` serializes conflicting writes; `set-state mode`
+  is the autonomy dial. GSD mode = wave subagents; Ralph mode = `claude -p` fresh sessions —
+  both append the SAME `bd comment` evidence trail.
+- **Remember:** progress→`comment`, knowledge→`remember`, evidence→`comment`, decisions→
+  `type=decision`. No PROGRESS.md, no STATE.md, no handoff.md.
+- **Gate:** human approvals + STOP-conditions + CI become `bd gate` beads — durable and
+  visible in the queue, not lost in chat.
+- **Verify:** the `evaluator` reads the comment evidence and writes its verdict as a comment;
+  `bd lint` + `acceptance` enforce the DoD.
+
+### Sober — maturity tiers (verify before relying)
+- **Solid core (use now):** comment/note, remember, acceptance/design/notes/metadata,
+  deps/ready/epic, lint, `--readonly`, search.
+- **Advanced (spike first):** swarm, merge-slot, gate, formula/molecule, federation — powerful
+  but young, and the `gt:`/`rig`/`polecat` vocabulary shows they belong to a larger
+  agent-swarm system; confirm semantics + stability before building the engine on them.
+  Start on the solid core; add advanced primitives one at a time behind a working baseline.
