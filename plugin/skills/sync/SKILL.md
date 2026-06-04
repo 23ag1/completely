@@ -1,6 +1,6 @@
 ---
 name: completely:sync
-description: Migrate existing markdown task state (Ralph IMPLEMENTATION_PLAN.md, checkbox task lists) into Beads, idempotently. Use when adopting completely in a repo that has markdown plans, or after an upstream update, to keep Beads the single source of truth. Backed by `cmpl sync`.
+description: MIGRATION (one-time). Import existing markdown task state (Ralph IMPLEMENTATION_PLAN.md, checkbox task lists) into Beads, idempotently. Use when adopting completely in a repo that has markdown plans, or after an upstream update, to keep Beads the single source of truth. Backed by `cmpl sync`.
 version: 0.2.0
 user-invocable: true
 argument-hint: "[dir] [extra-markdown-files...]"

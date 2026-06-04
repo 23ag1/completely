@@ -43,9 +43,25 @@ print(sum(1 for i in d if i.get("issue_type")!="epic"))'
 }
 
 if [ "$MODE" = supervised ]; then
-  echo "run/supervised: drive with GSD — /gsd:execute-phase <phase>."
-  echo "  completely's quality-gate hook, evaluator, and the no-stub contract run underneath."
-  echo "  Status stays in Beads; learnings go to bd comments (not STATE.md)."
+  echo "run/supervised: Beads-driven waves (ready front from 'bd swarm status' / 'bd ready')."
+  CP="$(bd ready --json 2>/dev/null | python3 -c '
+import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+d=d if isinstance(d,list) else d.get("issues",[])
+for it in d:
+    if it.get("issue_type")=="epic": continue
+    if "checkpoint" in (it.get("labels") or []):
+        print(it["id"], it.get("title",""), sep="  "); break
+')"
+  if [ -n "$CP" ]; then
+    echo "  ⏸ checkpoint pending: $CP"
+    echo "     verify it, then: bd close <id>  (downstream waves stay blocked until then)"
+    exit 0
+  fi
+  echo "  ready front:"; bd ready 2>/dev/null | grep -v 'epic]' | sed -n '1,6p'
+  echo "  → run this wave (GSD wave-subagents, or one task at a time). Gates pause automatically;"
+  echo "    quality hooks + evaluator run underneath; status + evidence stay in Beads."
   exit 0
 fi
 

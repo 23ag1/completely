@@ -57,6 +57,7 @@ Then, in any repo:
 cmpl setup          # check upstreams (GSD/Ralph/Beads/claude-mem) + wire Beads
 /completely:init    # discovery: new vs existing, stack + architecture, scaffold the thin layer
 cmpl quality        # install a pre-commit gate (cmpl check) + starter lint configs
+/completely:plan    # plan a feature straight into Beads (no markdown) — discovery + decompose
 cmpl check          # run all checks in one pass → "clean" or just the failure
 cmpl run --dry-run  # see the queue, then `cmpl run` to drive bd ready
 ```
@@ -71,8 +72,9 @@ cmpl run --dry-run  # see the queue, then `cmpl run` to drive bd ready
 |---|---|
 | `cmpl check` | run all configured quality checks, one pass, terse output |
 | `cmpl lint` | enforce the worker-contract (acceptance+design+write-zone) on Beads tasks |
-| `cmpl sync` | migrate markdown task state → Beads (idempotent) |
-| `cmpl emit <PLAN.md>` | GSD plan → Beads epic + tasks (idempotent) |
+| `cmpl plan-apply` | materialize a structured plan → Beads epic+tasks+swarm (the **Beads-first** path, no markdown) |
+| `cmpl sync` | *migration:* import existing markdown task lists → Beads |
+| `cmpl emit <PLAN.md>` | *migration:* import an existing GSD `PLAN.md` → Beads |
 | `cmpl run` | drive `bd ready` — supervised (GSD) or unattended (Ralph) |
 | `cmpl setup` | verify upstreams + wire project Beads |
 | `cmpl quality` | scaffold pre-commit gate + lint configs |
