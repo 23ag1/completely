@@ -258,3 +258,104 @@ dimensions), `lint` (enforce required sections per type), `--readonly` (worker s
   but young, and the `gt:`/`rig`/`polecat` vocabulary shows they belong to a larger
   agent-swarm system; confirm semantics + stability before building the engine on them.
   Start on the solid core; add advanced primitives one at a time behind a working baseline.
+
+---
+
+## 10. Per-tool detail cards (verified surfaces, not assumptions)
+
+**GSD** — `get-shit-done/` (has `VERSION`)
+- Shape: thin command (`commands/gsd/*.md`) → workflow logic (`workflows/*.md`, 34 files) →
+  `bin/gsd-tools.cjs` (Node state CLI: `init <workflow>`, `init todos`, …) → **11 subagents**
+  (`agents/gsd-*`) → references = the "constitution" (model-profiles, tdd, verification-patterns,
+  checkpoints, questioning, planning-config, continuation-format, git-integration, ui-brand).
+- State (`.planning/`): `STATE.md` (position + decisions, read before every op), `ROADMAP.md`,
+  per-plan `SUMMARY.md`, plan files, todos. Atomic commit per task.
+- Parallelism: plans → **waves**; orchestrator ~15% ctx spawns subagents/wave; **checkpoints**
+  between waves (`human-verify` / `decision`); `AUTO_CFG` auto-mode auto-approves/auto-selects;
+  uses fresh **continuation** agents, not resume.
+- Model profiles `quality|balanced|budget` map the 11 agents → opus/sonnet/haiku (balanced default).
+- Update: `gsd:update` (wipes + reinstalls) + `gsd:reapply-patches` (LLM 3-way merge of
+  `gsd-local-patches/` via `backup-meta.json`). Beads-aware: **NO**.
+
+**Ralph** — `ralph-loop/` (own git clone)
+- Shape: `loop.sh` (`while true; cat PROMPT_$MODE.md | claude -p --dangerously-skip-permissions
+  --output-format=stream-json`; `git push` each iter; optional max-iter) + `PROMPT_build` /
+  `PROMPT_plan` + `commands/ralph/{build,plan,help}` (plan.md ≡ PROMPT_plan — duplicate).
+- State (markdown): `PRD.md`, `specs/`, `IMPLEMENTATION_PLAN.md` (checkbox tasks),
+  `PROGRESS.md` (append-only), `AGENTS.md` (commands template, placeholders).
+- Discipline: one task/iter, search-before-assume, tests before commit, append progress,
+  emit `IMPLEMENTATION COMPLETE`. Gaps: no quality gates, skip-permissions, no beads, can vibe-loop.
+- Update: `git pull` (it's a clone).
+
+**Beads** — `bd` (Go CLI, dolt-backed = versioned/branchable; part of a larger **"gt" swarm
+system**: rig / polecat / `GT_ROOT`)
+- Issue: id, type (task/bug/feature/chore/epic/**decision=ADR**; custom via config), status,
+  priority, description, **acceptance**, **design**(+file), **notes**(+append), **metadata**(JSON),
+  labels, typed deps.
+- Memory/log: `comment`/`comments`, `note`, `remember`(--key, injected at `bd prime`), `history`.
+- Coordination: `swarm` (epic DAG), `merge-slot` (exclusive write-conflict slot + waiter queue),
+  `gate` (human/timer/gh:run/gh:pr/bead), `set-state` (event-sourced state dimensions).
+- Templates: `formula` (`.beads/formulas`, Rig→Cook→Run) → `cook` → proto → `mol`
+  (pour=persistent / wisp=ephemeral; vars `{{}}`, bond, distill, squash). `lint` enforces
+  required sections per type.
+- Recall: `query` language, `search`, `find-duplicates` (text/AI).
+- Distribution: `export` JSONL, `federation` (P2P), `ship` (export:/provides:/external: cross-project
+  caps), github/gitlab/notion, dolt branch/diff/merge.
+- Safety: `--readonly` (worker sandbox), `--actor` (audit), `--sandbox` (no auto-sync).
+- **Key realization:** Beads already *is* an orchestration substrate (formula+swarm+gate+merge-slot),
+  not just memory. Building "GSD+Ralph on Beads" risks reinventing what gt/Beads offers — prefer
+  to *lean on* Beads' native swarm/gate/formula as the engine, GSD for planning depth, Ralph for
+  the OS-level loop.
+
+**claude-mem** — plugin v10.3.1 (Alex Newman, **AGPL-3.0** ⚠ copyleft — matters for redistribution)
+- Shape: hooks (Setup, SessionStart = smart-install + bun worker-service daemon + inject context,
+  UserPromptSubmit, PostToolUse = observation, Stop = summarize + session-complete) + MCP server.
+- Stores auto-extracted "observations" per session; SessionStart injects a token-economical index
+  (titles/types/files/tokens), fetch-on-demand.
+- MCP 3-step: `search` (query/type/date/project → IDs) → `timeline` (context around anchor) →
+  `get_observations` (full by IDs); plus `save_memory` (manual). Overlaps `bd remember`/`bd search`.
+
+**Skills/commands** — live in 4 places, with real overlap:
+- Local commands (`~/.claude/commands/*.md`): plan, tdd, verify, code-review, build-fix,
+  refactor-clean, update-docs, skill-create.
+- Installed skills (`~/.claude/skills/`): impeccable (craft/teach/extract), ui-ux-pro-max
+  (design DB), shape (UX discovery), output-skill (full-output-enforcement) + design family + geo-*.
+- Plugin skills: claude-mem (do/make-plan/mem-search), openclaw (make-plan), gsd:*, ralph:*.
+- Built-in Claude Code: simplify, code-review, verify, run, init, security-review.
+- Overlaps to resolve: **plan** (≥3×: command + openclaw + built-in), **code-review** (command +
+  built-in), **verify** (command + built-in), **simplify** (built-in). The router must pick ONE per intent.
+
+## 11. Distribution & upgrade-safety (install everything; pull updates; never break a step)
+
+Goal: one install pulls **GSD + Ralph + Beads + claude-mem + harness**, auto-applies our wiring,
+and an md→bd migration keeps working *after upstream updates*. Four upstreams = four update
+channels we don't control: GSD (`gsd:update`+reapply-patches), Ralph (`git pull`), Beads (binary),
+claude-mem (plugin update). Rules that make this safe:
+
+1. **Never edit upstream files — overlay, don't patch.** Ship behavior as *separate* files that
+   compose, not edits to GSD workflows / Ralph PROMPTs:
+   - our own driver skill `/harness-run` that *calls* GSD's planner/executor and Ralph's loop;
+   - our own `PROMPT_build.beads.md` that `loop.sh` is pointed at via arg/env (original untouched);
+   - GSD→Beads emission as a *post-step* that reads `.planning` output and writes bd — outside GSD's files.
+   Overlays survive any update because upstream files are untouched. (Only where an edit is truly
+   unavoidable, fall back to GSD's `gsd-local-patches/` reapply pattern — and minimize it.)
+
+2. **Idempotent `harness-sync` (md→bd).** Safe to run any number of times, post-install AND
+   post-update: scan GSD `.planning`/STATE/todos + Ralph IMPLEMENTATION_PLAN/PROGRESS → **upsert**
+   into Beads, keyed by a stable `metadata.source_ref` (create if absent, update if changed, never
+   duplicate). Because it upserts on a key, re-running after an update just reconciles — nothing breaks.
+
+3. **Version pinning + `harness-doctor`.** `harness/versions.lock` records tested upstream versions.
+   On install/update, doctor compares installed vs tested; if an upstream changed something our
+   overlay depends on (GSD `.planning` schema, Ralph PROMPT filename, a `bd` subcommand) it **fails
+   loud** with a clear message and *isolates* that overlay (disable it, keep the rest working).
+   "A step breaks" becomes "a step is detected and quarantined" — never silent corruption.
+
+4. **Installer orchestrates.** `install.sh` / plugin Setup hook: ensure Beads (`bd init`),
+   install/verify GSD+Ralph+claude-mem at pinned versions, drop overlays, run `harness-sync`,
+   run `harness-doctor`. One `harness-update` re-pulls each upstream via its own channel, re-drops
+   overlays, re-runs sync + doctor.
+
+5. **Beads is the durable floor.** All state lands in dolt-versioned Beads, so even if one upstream
+   breaks on update, the work survives in `bd` and you finish in another mode. That safety net is
+   what makes "no step breaks" actually achievable, not aspirational.
