@@ -11,6 +11,7 @@ case "$cmd" in
   setup)  exec bash "$S/bootstrap.sh" "$@" ;;
   lint)   exec bash "$S/lint.sh" "$@" ;;
   emit)   exec bash "$S/emit.sh" "$@" ;;
+  test)   exec bash "$ROOT/tests/contracts.sh" "$@" ;;
   init)   echo "cmp: run /completely:init inside Claude Code to scaffold this repo." ;;
   run)    exec bash "$S/run.sh" "$@" ;;
   update) if [ -f "$S/update.sh" ]; then exec bash "$S/update.sh" "$@"; else echo "cmp update: planned (bd: harness-update)"; fi ;;
