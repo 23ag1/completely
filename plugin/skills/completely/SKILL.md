@@ -5,13 +5,13 @@ version: 0.2.0
 user-invocable: true
 ---
 **completely** makes it hard for an agent to quietly cut a corner, fake "done", or ship a stub.
-Short CLI: `cmp`.  Slash: `/completely:*`.
+Short CLI: `cmpl`.  Slash: `/completely:*`.
 
 ## Command surface
 - `/completely:init` — scaffold the thin layer (DoD, CLAUDE.md rules, project gate) into this repo.
-- `/completely:sync` (`cmp sync`) — migrate markdown task state into Beads, idempotently.
+- `/completely:sync` (`cmpl sync`) — migrate markdown task state into Beads, idempotently.
 - `/completely:run` — drive `bd ready`: supervised (GSD wave subagents) or unattended (Ralph loop).
-- `/completely:doctor` (`cmp doctor`) — upstream version drift + overlay health.
+- `/completely:doctor` (`cmpl doctor`) — upstream version drift + overlay health.
 
 ## How it fits (one engine, one spine)
 Beads = the spine (status + memory via comments/notes/remember + coordination via swarm/gate/merge-slot).

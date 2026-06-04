@@ -4,7 +4,7 @@
 # One command instead of the agent running lint+types+tests separately (saves tokens, fixed
 # sequence). Output is terse: a "✓ name" line per passing check; for a FAILING check, only that
 # check's captured output (tail) — not every log. Clean run = one "clean" line. Adding a check =
-# edit completely.toml [check], not this script. Backend for `cmp check`.
+# edit completely.toml [check], not this script. Backend for `cmpl check`.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJ="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
@@ -13,7 +13,7 @@ TAIL="${CMP_CHECK_TAIL:-30}"
 
 CHECKS="$(python3 "$ROOT/scripts/config.py" checks "$PROJ" 2>/dev/null)"
 if [ -z "$CHECKS" ]; then
-  echo "cmp check: no checks configured or detected in $PROJ (add a [check] table to completely.toml)"
+  echo "cmpl check: no checks configured or detected in $PROJ (add a [check] table to completely.toml)"
   exit 0
 fi
 
@@ -33,8 +33,8 @@ done <<< "$CHECKS"
 rm -f "$out"
 
 if [ "$fail" -eq 0 ]; then
-  echo "cmp check: clean ($total checks)"
+  echo "cmpl check: clean ($total checks)"
   exit 0
 fi
-echo "cmp check: $fail/$total checks FAILED (only failures shown above)"
+echo "cmpl check: $fail/$total checks FAILED (only failures shown above)"
 exit 1

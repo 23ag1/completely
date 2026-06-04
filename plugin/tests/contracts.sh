@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # completely :: contract tests — assert the harness's deterministic contracts actually bite.
-# "TDD for the process" (Maslennikov): test the contracts, not the model. Backend for `cmp test`.
+# "TDD for the process" (Maslennikov): test the contracts, not the model. Backend for `cmpl test`.
 #
 # Covers what is verifiable without a live agent: guard, sync idempotency, lint, emit, doctor.
 # Live-agent contracts (matrix-before-delegate / real parallel spawn / closeout rejects no-evidence)
@@ -64,7 +64,7 @@ printf '# P\n<tasks>\n<task type="auto"><name>T</name><files>a</files><action>x<
 [ "$rc" = 3 ] && ok "quarantined emit refuses (exit 3)" || no "quarantined emit refuses (got $rc)"
 rm -rf "$ST" "$DQ"
 
-echo "== cmp check (concise output) =="
+echo "== cmpl check (concise output) =="
 D=$(mktmp)
 printf '[check]\ncommands = [ { name = "ok", cmd = "true" }, { name = "bad", cmd = "echo E123; exit 1" } ]\n' > "$D/completely.toml"
 bash "$ROOT/scripts/check.sh" "$D" >/tmp/cmpcc.out 2>&1; rc=$?

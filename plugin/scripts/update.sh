@@ -5,7 +5,7 @@
 # plugin, so they're always "re-applied"), and re-runs the idempotent md→Beads sync. Pass --apply
 # to also `git pull` Ralph (the one safe auto-pull). GSD/Beads/claude-mem update via their own
 # channels — printed, never auto-run, so an upstream bump is always your explicit call.
-# Backend for `cmp update`.
+# Backend for `cmpl update`.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APPLY=0; [ "${1:-}" = "--apply" ] && APPLY=1
@@ -29,4 +29,4 @@ else
 fi
 
 echo "update: done. Update GSD/Beads/claude-mem via their channels (/gsd:update, beads installer,"
-echo "        /plugin update), then re-run 'cmp update' to refresh sync + quarantine."
+echo "        /plugin update), then re-run 'cmpl update' to refresh sync + quarantine."

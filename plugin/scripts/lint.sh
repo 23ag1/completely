@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # completely :: lint — enforce the worker-contract on Beads tasks.
 # Built-in `bd lint` (acceptance/success-criteria by type) + completely's extra check that every
-# open task has acceptance + design + metadata.write_zone. Backend for `cmp lint`.
+# open task has acceptance + design + metadata.write_zone. Backend for `cmpl lint`.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 [ -d .beads ] || { echo "lint: run from a repo with 'bd init'" >&2; exit 1; }

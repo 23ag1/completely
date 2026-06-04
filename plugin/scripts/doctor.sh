@@ -4,7 +4,7 @@
 # Reports installed vs tested (versions.lock). On drift it QUARANTINES the completely components
 # that depend on the drifted tool (writes a marker); those commands then refuse to run without
 # --force / CMP_FORCE=1, so an upstream change can't silently corrupt a step. Drift = handled,
-# not silent. Backend for `cmp doctor`.
+# not silent. Backend for `cmpl doctor`.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOCK="${CMP_LOCK:-$ROOT/versions.lock}"

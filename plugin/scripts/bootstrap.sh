@@ -2,11 +2,11 @@
 # completely :: setup/bootstrap — verify all upstreams and wire a project onto the Beads spine.
 #
 # Safe by default: REPORTS upstream presence/versions, runs doctor, and tells you what's missing
-# with the install command. Pass --apply to actually `bd init` the project and run `cmp sync`.
+# with the install command. Pass --apply to actually `bd init` the project and run `cmpl sync`.
 # It never auto-installs upstream tools or mutates your global setup — installing GSD/Ralph/etc.
 # stays an explicit, your-call step (printed hints), so an upstream change can't break you silently.
 #
-# Backend for `cmp setup` and the plugin Setup hook.
+# Backend for `cmpl setup` and the plugin Setup hook.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,7 +15,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT="${2:-.}"; shift 2 ;;
     --apply)   APPLY=1; shift ;;
-    -h|--help) echo "cmp setup [--project DIR] [--apply]"; exit 0 ;;
+    -h|--help) echo "cmpl setup [--project DIR] [--apply]"; exit 0 ;;
     *) echo "setup: unknown arg '$1'" >&2; exit 1 ;;
   esac
 done
@@ -48,4 +48,4 @@ else
   echo "  sync: skipped (needs .beads + --apply)"
 fi
 
-echo "setup: done. Next → /completely:init (scaffold thin layer), then 'cmp run' to drive bd ready."
+echo "setup: done. Next → /completely:init (scaffold thin layer), then 'cmpl run' to drive bd ready."

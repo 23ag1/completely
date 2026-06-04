@@ -1,6 +1,6 @@
 # Task template — the worker-contract shape for `bd create`
 
-Each field closes one silent-failure class. `cmp lint` FAILs any open task missing
+Each field closes one silent-failure class. `cmpl lint` FAILs any open task missing
 acceptance, design, or metadata.write_zone.
 
 ```bash

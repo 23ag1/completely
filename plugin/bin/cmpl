@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# cmpl — the completely CLI (short form, like `bd` is to beads).
+# Wraps the harness shell tools. Slash equivalents: /completely:<cmd>.
+set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # plugin root
+S="$ROOT/scripts"
+cmd="${1:-help}"; [ $# -gt 0 ] && shift || true
+case "$cmd" in
+  sync)   exec bash "$S/sync.sh" "$@" ;;
+  doctor) exec bash "$S/doctor.sh" "$@" ;;
+  setup)  exec bash "$S/bootstrap.sh" "$@" ;;
+  lint)   exec bash "$S/lint.sh" "$@" ;;
+  emit)   exec bash "$S/emit.sh" "$@" ;;
+  test)   exec bash "$ROOT/tests/contracts.sh" "$@" ;;
+  check)  exec bash "$S/check.sh" "$@" ;;
+  init)   echo "cmpl: run /completely:init inside Claude Code to scaffold this repo." ;;
+  run)    exec bash "$S/run.sh" "$@" ;;
+  update) if [ -f "$S/update.sh" ]; then exec bash "$S/update.sh" "$@"; else echo "cmpl update: planned (bd: harness-update)"; fi ;;
+  version|-V|--version) echo "completely (cmpl) v0.2 — quality-first agent harness" ;;
+  help|-h|--help)
+    cat <<'USAGE'
+completely — quality-first agent harness.  Short CLI: cmpl
+
+  cmpl sync [dir] [files...]  Migrate markdown task state -> Beads (idempotent)
+  cmpl doctor                 Check upstream versions + overlay health
+  cmpl init / run             (use /completely:init , /completely:run in Claude Code)
+  cmpl update                 Re-pull upstreams, re-apply overlays, re-sync
+  cmpl version
+
+Slash: /completely  /completely:init  /completely:sync  /completely:run  /completely:doctor
+USAGE
+    ;;
+  *) echo "cmpl: unknown subcommand '$cmd' (try: cmpl help)" >&2; exit 1 ;;
+esac

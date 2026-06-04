@@ -2,7 +2,7 @@
 """completely config — resolve quality checks from completely.toml, or auto-detect per stack.
 
 Usage:
-  config.py checks <dir>   -> TSV lines: name<TAB>cwd<TAB>command   (for `cmp check`)
+  config.py checks <dir>   -> TSV lines: name<TAB>cwd<TAB>command   (for `cmpl check`)
   config.py show <dir>     -> the resolved config as JSON (for debugging)
 
 A project customizes the pipeline by editing completely.toml; with no config we detect a

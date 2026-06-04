@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# completely :: emit — turn GSD PLAN.md file(s) into Beads (epic + tasks). Backend for `cmp emit`.
+# completely :: emit — turn GSD PLAN.md file(s) into Beads (epic + tasks). Backend for `cmpl emit`.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 [ -d .beads ] || { echo "emit: run from a repo with 'bd init'" >&2; exit 1; }
-[ $# -ge 1 ] || { echo "usage: cmp emit <PLAN.md> [more-PLAN.md...]"; exit 1; }
+[ $# -ge 1 ] || { echo "usage: cmpl emit <PLAN.md> [more-PLAN.md...]"; exit 1; }
 QFILE="${CMP_STATE:-$ROOT}/quarantine.txt"
 if [ -f "$QFILE" ] && grep -qx gsd "$QFILE" && [ "${CMP_FORCE:-0}" != 1 ]; then
   echo "emit: gsd is quarantined (version drift) — its PLAN.md format may have changed." >&2

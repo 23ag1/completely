@@ -35,7 +35,7 @@ Then, inside any repo:
 /completely:init
 ```
 
-Short CLI (installed on PATH, like `bd` is to beads): `cmp sync`, `cmp doctor`.
+Short CLI (installed on PATH, like `bd` is to beads): `cmpl sync`, `cmpl doctor`.
 Slash commands: `/completely`, `/completely:init`, `/completely:sync`, `/completely:run`, `/completely:doctor`.
 
 …which scaffolds the project's thin layer (`Definition of Done`, a `CLAUDE.md` snippet,
@@ -58,8 +58,8 @@ git clone https://github.com/23ag1/completely && cd completely
 | `Definition of Done` | Checklist where each item is FAIL until proven, output attached. | `plugin/templates/DEFINITION_OF_DONE.md` |
 | self-tooling contract | The no-silent-stub rule, for `CLAUDE.md`. | `plugin/core/self-tooling.md` |
 | `/completely:init` skill | Scaffolds the per-project thin layer. | `plugin/skills/init/` |
-| `cmp` CLI + `cmp sync` | Short CLI; idempotent markdown→Beads task migration. | `plugin/bin/cmp`, `plugin/scripts/sync.sh` |
-| `cmp doctor` | Upstream version-drift + overlay health check. | `plugin/scripts/doctor.sh`, `plugin/versions.lock` |
+| `cmpl` CLI + `cmpl sync` | Short CLI; idempotent markdown→Beads task migration. | `plugin/bin/cmpl`, `plugin/scripts/sync.sh` |
+| `cmpl doctor` | Upstream version-drift + overlay health check. | `plugin/scripts/doctor.sh`, `plugin/versions.lock` |
 | the principle | The full A→B→C→D flow, role-ownership map, STOP-conditions. | `plugin/core/HARNESS.md`, `plugin/core/roles.md` |
 
 ## How it fits with your other tools

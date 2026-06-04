@@ -11,7 +11,7 @@
 #   supervised: hand off to GSD's wave executor (interactive); completely gates + evaluator run
 #     underneath either way.
 #
-# Backend for `cmp run` and the `/completely:run` skill.
+# Backend for `cmpl run` and the `/completely:run` skill.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
     --mode)    MODE="${2:-}"; shift 2 ;;
     --max)     MAX="${2:-0}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
-    -h|--help) echo "cmp run [--mode unattended|supervised] [--max N] [--dry-run]"; exit 0 ;;
+    -h|--help) echo "cmpl run [--mode unattended|supervised] [--max N] [--dry-run]"; exit 0 ;;
     *) echo "run: unknown arg '$1'" >&2; exit 1 ;;
   esac
 done

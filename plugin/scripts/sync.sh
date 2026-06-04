@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # completely :: sync — idempotent migration of markdown task state -> Beads.
 #
-# Backend for `cmp sync` and the `/completely:sync` skill. Upserts each markdown task
+# Backend for `cmpl sync` and the `/completely:sync` skill. Upserts each markdown task
 # into Beads keyed by a stable source_ref (label `src-<sha1[:8]>` + metadata.source_ref),
 # so it is SAFE TO RE-RUN — after an upstream update it reconciles instead of duplicating.
 # That is what makes "pull updates, no step breaks" hold (design §11).

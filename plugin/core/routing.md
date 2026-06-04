@@ -7,7 +7,7 @@ the canonical for the task's intent and records it in the task `metadata.skills`
 | Intent | Canonical | Also exists (do NOT call in parallel) |
 |---|---|---|
 | brainstorm / spec | `/gsd:discuss-phase` (or `/gsd:new-project`) | superpowers brainstorm |
-| plan / decompose | `/gsd:plan-phase` → `cmp emit` | `commands/plan.md`, openclaw make-plan, built-in `/plan` |
+| plan / decompose | `/gsd:plan-phase` → `cmpl emit` | `commands/plan.md`, openclaw make-plan, built-in `/plan` |
 | execute / drive | `/completely:run` | `/gsd:execute-phase` (= supervised mode), `ralph:build` |
 | TDD | `commands/tdd.md` | gsd `references/tdd.md` |
 | simplify code | built-in `/simplify` | — |

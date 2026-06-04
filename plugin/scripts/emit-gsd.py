@@ -10,7 +10,7 @@ onto Beads fields so the queue (not markdown) is the source of truth:
 
 Idempotent: each task is keyed by a stable source_ref (label `src-<sha1[:8]>`), so re-emitting
 after GSD re-plans reconciles instead of duplicating. checkpoint:* tasks become human-gate
-issues labelled `checkpoint` (skipped by `cmp lint`'s worker-contract check).
+issues labelled `checkpoint` (skipped by `cmpl lint`'s worker-contract check).
 
 Usage: emit-gsd.py <PLAN.md>
 Validated against GSD 1.20.x PLAN.md task syntax. Re-check against your GSD version if it drifts.
