@@ -9,7 +9,7 @@ case "$cmd" in
   sync)   exec bash "$S/sync.sh" "$@" ;;
   doctor) exec bash "$S/doctor.sh" "$@" ;;
   init)   echo "cmp: run /completely:init inside Claude Code to scaffold this repo." ;;
-  run)    echo "cmp: run /completely:run inside Claude Code (GSD supervised | Ralph unattended)." ;;
+  run)    exec bash "$S/run.sh" "$@" ;;
   update) if [ -f "$S/update.sh" ]; then exec bash "$S/update.sh" "$@"; else echo "cmp update: planned (bd: harness-update)"; fi ;;
   version|-V|--version) echo "completely (cmp) v0.2 — quality-first agent harness" ;;
   help|-h|--help)
