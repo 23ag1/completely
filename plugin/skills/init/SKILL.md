@@ -58,3 +58,17 @@ DETECT and LAYER — do not clobber:
   treating user skills as first-class for their intents.
 - If a user skill already covers an intent (e.g. their own `/review`), PREFER it over the
   harness default and record the choice in routing. Hierarchy, not replacement.
+
+## Discovery (new vs existing) — do this FIRST
+1. **Ask what it is** — one question: what are we building / what is this repo?
+2. **New vs existing:**
+   - **NEW** (empty repo / no source) → scaffold from zero: CLAUDE.md, `completely.toml`, pick
+     stack + architecture (offer presets, recommend a default), set up quality (`cmpl quality`),
+     reference the rules. Confirm, then write.
+   - **EXISTING** → STUDY first: read CLAUDE.md/AGENTS.md, package.json/pyproject, the dir shape;
+     infer stack + architecture; then ask ONLY the gaps — don't re-ask what you can see. Reconcile
+     with the existing CLAUDE.md — APPEND harness rules, never overwrite the user's content.
+3. **Ask architecture** (see `core/architectures.md`). If unsure → choose the recommended for the
+   stack and state the one-line trade-off.
+4. Record in `completely.toml` (`[project][stack][architecture]`) and the CLAUDE.md snippet.
+One question at a time; idempotent; never interrogate or clobber.
