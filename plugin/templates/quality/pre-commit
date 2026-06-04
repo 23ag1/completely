@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# completely pre-commit — run the consolidated quality gate; block the commit on failure.
+ROOT="$(git rev-parse --show-toplevel)"
+if command -v cmpl >/dev/null 2>&1; then
+  cmpl check "$ROOT" || { echo "pre-commit: cmpl check failed (bypass: git commit --no-verify)"; exit 1; }
+elif [ -x "$ROOT/.completely/check.sh" ]; then
+  "$ROOT/.completely/check.sh" "$ROOT" || exit 1
+else
+  echo "pre-commit: 'cmpl' not on PATH — install completely to enable the gate."
+fi

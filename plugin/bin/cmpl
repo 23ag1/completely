@@ -13,6 +13,7 @@ case "$cmd" in
   emit)   exec bash "$S/emit.sh" "$@" ;;
   test)   exec bash "$ROOT/tests/contracts.sh" "$@" ;;
   check)  exec bash "$S/check.sh" "$@" ;;
+  quality) exec bash "$S/scaffold-quality.sh" "$@" ;;
   init)   echo "cmpl: run /completely:init inside Claude Code to scaffold this repo." ;;
   run)    exec bash "$S/run.sh" "$@" ;;
   update) if [ -f "$S/update.sh" ]; then exec bash "$S/update.sh" "$@"; else echo "cmpl update: planned (bd: harness-update)"; fi ;;
