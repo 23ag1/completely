@@ -1,23 +1,50 @@
 #!/usr/bin/env bash
-# completely :: doctor — report upstream tool versions vs the tested lock, flag drift (warn, not fail).
+# completely :: doctor — upstream version drift + overlay quarantine.
+#
+# Reports installed vs tested (versions.lock). On drift it QUARANTINES the completely components
+# that depend on the drifted tool (writes a marker); those commands then refuse to run without
+# --force / CMP_FORCE=1, so an upstream change can't silently corrupt a step. Drift = handled,
+# not silent. Backend for `cmp doctor`.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-LOCK="$ROOT/versions.lock"
+LOCK="${CMP_LOCK:-$ROOT/versions.lock}"
+STATE="${CMP_STATE:-$ROOT}"
+QFILE="$STATE/quarantine.txt"
 [ -f "$LOCK" ] || { echo "doctor: no versions.lock (run install)"; exit 0; }
+
 ver(){ case "$1" in
-  bd) bd version 2>/dev/null | head -1 ;;
-  gsd) cat "$HOME/.claude/get-shit-done/VERSION" 2>/dev/null ;;
-  ralph) git -C "$HOME/.claude/ralph-loop" rev-parse --short HEAD 2>/dev/null ;;
+  bd)         bd version 2>/dev/null | head -1 ;;
+  gsd)        cat "$HOME/.claude/get-shit-done/VERSION" 2>/dev/null ;;
+  ralph)      git -C "$HOME/.claude/ralph-loop" rev-parse --short HEAD 2>/dev/null ;;
   claude-mem) ls "$HOME/.claude/plugins/cache/thedotmack/claude-mem" 2>/dev/null | head -1 ;;
 esac; }
-ok=0; warn=0
+affected(){ case "$1" in   # which completely components depend on this upstream
+  gsd)        echo "emit (GSD PLAN.md parser)";;
+  bd)         echo "sync, emit, lint, run (bd JSON fields)";;
+  ralph)      echo "run unattended overlay";;
+  claude-mem) echo "memory recall only";;
+esac; }
+
+ok=0; warn=0; DRIFT=""
 echo "completely doctor — upstream versions"
 while IFS='=' read -r tool tested; do
   [ -z "$tool" ] && continue
   case "$tool" in \#*) continue;; esac
   cur="$(ver "$tool")"; cur="${cur:-<absent>}"
-  if [ "$cur" = "$tested" ]; then echo "  ok    $tool: $cur"; ok=$((ok+1))
-  else echo "  DRIFT $tool: installed=$cur tested=$tested -> review $tool overlays before relying"; warn=$((warn+1)); fi
+  if [ "$cur" = "$tested" ]; then
+    echo "  ok    $tool: $cur"; ok=$((ok+1))
+  else
+    echo "  DRIFT $tool: installed=$cur tested=$tested → quarantines: $(affected "$tool")"
+    warn=$((warn+1)); DRIFT="$DRIFT $tool"
+  fi
 done < "$LOCK"
-echo "doctor: $ok ok, $warn drift"
+
+DRIFT="$(echo "$DRIFT" | xargs 2>/dev/null || true)"
+if [ -n "$DRIFT" ]; then
+  printf '%s\n' $DRIFT > "$QFILE"
+  echo "doctor: $ok ok, $warn drift — quarantined: $DRIFT (affected commands need --force until re-tested)"
+else
+  rm -f "$QFILE" 2>/dev/null || true
+  echo "doctor: $ok ok, 0 drift — no quarantine"
+fi
 exit 0

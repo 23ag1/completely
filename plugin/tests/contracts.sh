@@ -53,6 +53,17 @@ rm -rf "$D"
 echo "== doctor =="
 bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1 && ok "doctor runs" || no "doctor runs"
 
+echo "== doctor quarantine =="
+ST=$(mktemp -d /tmp/cmpqtXXXXXX)
+sed 's/^gsd=.*/gsd=0.0.0-FAKE/' "$ROOT/versions.lock" > "$ST/lock"
+CMP_LOCK="$ST/lock" CMP_STATE="$ST" bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1
+grep -qx gsd "$ST/quarantine.txt" 2>/dev/null && ok "drift writes quarantine" || no "drift writes quarantine"
+DQ=$(mktmp)
+printf '# P\n<tasks>\n<task type="auto"><name>T</name><files>a</files><action>x</action><verify>v</verify><done>d</done></task>\n</tasks>\n' > "$DQ/P-PLAN.md"
+( cd "$DQ" && CMP_STATE="$ST" bash "$ROOT/scripts/emit.sh" P-PLAN.md >/dev/null 2>&1 ); rc=$?
+[ "$rc" = 3 ] && ok "quarantined emit refuses (exit 3)" || no "quarantined emit refuses (got $rc)"
+rm -rf "$ST" "$DQ"
+
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
 skip "two independent streams actually spawn in parallel"
