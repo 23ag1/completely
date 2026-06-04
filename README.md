@@ -51,10 +51,19 @@ claude plugin marketplace add 23ag1/completely
 claude plugin install completely@completely
 ```
 
+**Requires Beads (`bd`)** — the only hard dependency. GSD (planning) and claude-mem (memory) are
+optional; Ralph is *not* required (completely's loop is built in). On install, a Setup hook reports
+what's missing. To auto-install it all (with consent):
+
+```bash
+cmpl setup --install            # install missing deps via their real channels
+cmpl setup --install --dry-run  # preview the exact commands first
+```
+
 Then, in any repo:
 
 ```bash
-cmpl setup          # check upstreams (GSD/Ralph/Beads/claude-mem) + wire Beads
+cmpl setup          # report deps; add --install to auto-install missing ones
 /completely:init    # discovery: new vs existing, stack + architecture, scaffold the thin layer
 cmpl quality        # install a pre-commit gate (cmpl check) + starter lint configs
 /completely:plan    # plan a feature straight into Beads (no markdown) — discovery + decompose

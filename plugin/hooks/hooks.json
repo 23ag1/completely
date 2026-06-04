@@ -1,6 +1,18 @@
 {
   "description": "claude-harness deterministic gates: quality-gate after edits, dangerous-command guard before Bash.",
   "hooks": {
+    "Setup": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/bootstrap.sh\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
