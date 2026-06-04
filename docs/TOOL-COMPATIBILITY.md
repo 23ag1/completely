@@ -85,12 +85,41 @@ Keep every strength; route all of them through **one** queue and **one** quality
 
 Rules that fall out of this:
 - **One queue:** Beads. GSD *emits* into it; Ralph *consumes* from it. GSD's TodoWrite/STATE/own-todos are demoted to a thin pointer, never the queue.
-- **One driver per run:** GSD execute-phase (supervised) **or** Ralph (unattended). Both read `bd ready`. Never both.
+- **Two modes, one engine, one dial:** GSD (supervised) and Ralph (unattended) are not a choice between tools but two *autonomy levels* of the same loop over `bd ready` (see §4a). One mode at a time per task; hand off freely between them because status lives in Beads, not in either tool's markdown.
 - **One acceptance gate:** harness `evaluator` (default-FAIL). `gsd-verifier` becomes a goal-backward *feeder* of evidence into the DoD; `verify`/`code-review` run inside the loop, not as rival gates.
 - **One quality floor:** harness hooks, on under every driver.
 - **One commands source:** the project's `scripts/check.sh`; Ralph `AGENTS.md` and the harness hook both point at it (no re-spec).
 - **Memory split (canonical):** `bd remember` = task-bound facts · claude-mem = semantic recall · MEMORY.md = durable user/project. Fix the AGENTS.md↔global contradiction by scoping, not by banning one.
 - **Safety:** do **not** use Ralph's blanket `--dangerously-skip-permissions`. For unattended runs use a permission *allowlist* + the harness guard hook + STOP-conditions, preserving a real gate.
+
+### 4a. Two modes of one engine — the autonomy dial
+
+GSD = control, Ralph = autonomy — correct. But the unification is **not "pick one"**: they are
+the *same execution loop at different autonomy levels*, sharing one spine (Beads), one quality
+floor (harness gates + evaluator), one set of contracts (worker contract, Parallel
+Decomposition Matrix, closeout). Only two things actually differ:
+
+| | **GSD mode** (supervised) | **Ralph mode** (unattended) |
+|---|---|---|
+| Human gate frequency | at phase/wave boundaries | only on STOP-conditions |
+| Context reset | in-session wave subagents (~15% orch.) | OS-level fresh session per task (`claude -p`) |
+| Best for | ambiguous / architectural / first-of-kind | atomic, unambiguous, green-spec backlog |
+| Contributes to the merge | planning depth, control, real parallelism | hardest reset, long unattended grind |
+
+**The dial.** A phase/task may run in Ralph mode *only* when: spec unambiguous **+** tasks atomic
+**+** write-zones disjoint **+** verification automated (red/green). Otherwise GSD mode. Make it an
+explicit field — `autonomy: supervised | unattended` + a reason — same discipline as
+Maslennikov's enumerated sequential-reasons (no vague "seemed simple").
+
+**The handoff that "combines the best."** GSD plans the phase and does the risky/ambiguous first
+tasks under supervision; once the pattern is set and the rest of `bd ready` is atomic, flip the
+**same queue** to Ralph mode and grind it unattended. Both modes leave identical artifacts
+(commit + `bd close` + evidence), so either can resume the other's work mid-phase.
+
+**Why this is only possible with Beads as the spine.** If status lived in GSD's `STATE.md` or
+Ralph's `IMPLEMENTATION_PLAN.md`, the modes could not hand off — you'd be locked into one tool's
+memory. Routing all status through Beads is exactly what turns "choose a tool" into "turn a dial".
+That single decision is what makes "best of both" mechanically possible rather than aspirational.
 
 ## 5. The work this implies (future — NOT done here)
 
