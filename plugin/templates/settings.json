@@ -1,0 +1,21 @@
+{
+  "_comment": "Project thin-layer settings written by /harness-init or install.sh --project. ONLY needed if you are NOT using the plugin install (the plugin registers these hooks globally on its own). __HARNESS_DIR__ is replaced with the absolute path to the installed harness hooks at scaffold time.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "bash \"__HARNESS_DIR__/quality-gate.sh\"", "timeout": 120 }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash \"__HARNESS_DIR__/guard-dangerous.sh\"", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

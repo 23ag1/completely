@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-harness",
+  "description": "Quality-first agent harness: deterministic quality/security gates, evidence-based acceptance (default-FAIL evaluator), and a no-silent-stub contract for Claude Code.",
+  "owner": {
+    "name": "REPLACE_ME",
+    "email": "you@example.com"
+  },
+  "plugins": [
+    {
+      "name": "harness",
+      "source": "./plugin",
+      "description": "Deterministic quality-gate + dangerous-command guard hooks, a read-only default-FAIL evaluator agent, a Definition of Done, a self-tooling (no-silent-stub) contract, and /harness-init to scaffold any repo.",
+      "category": "workflow"
+    }
+  ]
+}

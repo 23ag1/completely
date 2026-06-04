@@ -1,0 +1,11 @@
+{
+  "name": "harness",
+  "version": "0.1.0",
+  "description": "Quality-first agent harness: deterministic quality/security gates, a default-FAIL evaluator, and a no-silent-stub contract. Stack-agnostic; adapts per project.",
+  "author": {
+    "name": "REPLACE_ME",
+    "email": "you@example.com"
+  },
+  "homepage": "https://github.com/REPLACE_ME/claude-harness",
+  "keywords": ["harness", "quality-gate", "hooks", "tdd", "evaluator", "agent-workflow"]
+}
