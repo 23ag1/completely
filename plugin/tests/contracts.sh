@@ -86,6 +86,19 @@ n2=$(count "$D")
 ( cd "$D" && bash "$ROOT/scripts/lint.sh" >/dev/null 2>&1 ) && ok "plan-apply tasks are lint-clean" || no "plan-apply lint"
 rm -rf "$D"
 
+echo "== plan-apply field reconcile =="
+D=$(mktmp)
+printf '%s' '{"epic":"R","tasks":[{"key":"a","title":"A","acceptance":"v1","design":"d","write_zone":["a"]}]}' \
+  | ( cd "$D" && bash "$ROOT/scripts/plan.sh" >/dev/null 2>&1 )
+printf '%s' '{"epic":"R","tasks":[{"key":"a","title":"A","acceptance":"v2","design":"d","write_zone":["a"]}]}' \
+  | ( cd "$D" && bash "$ROOT/scripts/plan.sh" >/dev/null 2>&1 )
+AC=$( cd "$D" && bd list --all --json | python3 -c 'import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+vals=[i.get("acceptance_criteria") for i in d if i.get("title")=="A"]
+print(vals[0] if vals else "")' )
+[ "$AC" = "v2" ] && ok "plan-apply reconciles changed acceptance" || no "plan-apply reconcile (got: $AC)"
+rm -rf "$D"
+
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
 skip "two independent streams actually spawn in parallel"

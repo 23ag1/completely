@@ -72,7 +72,31 @@ def main():
                metadata=None, labels=()):
         lab = srclabel(ref)
         if lab in existing:
-            return existing[lab], "exists"
+            eid = existing[lab]
+            cur = bd("show", eid, "--json")
+            try:
+                d = json.loads(cur.stdout)
+                d = d[0] if isinstance(d, list) else d
+            except Exception:
+                d = {}
+            upd = []
+            if acceptance and (d.get("acceptance_criteria") or "") != acceptance:
+                upd += ["--acceptance", acceptance]
+            if design and (d.get("design") or "") != design:
+                upd += ["--design", design]
+            if metadata is not None:
+                cm = d.get("metadata") or {}
+                if isinstance(cm, str):
+                    try:
+                        cm = json.loads(cm)
+                    except Exception:
+                        cm = {}
+                if cm != metadata:
+                    upd += ["--metadata", json.dumps(metadata)]
+            if upd:
+                bd("update", eid, *upd)
+                return eid, "updated"
+            return eid, "exists"
         args = ["create", title, "-t", typ, "-l", ",".join([lab, *labels]), "--no-inherit-labels"]
         if parent:
             args += ["--parent", parent]
