@@ -18,6 +18,9 @@ bad = 0
 for it in data:
     if it.get("issue_type") != "task":
         continue
+    labels = it.get("labels") or []
+    if "checkpoint" in labels or "gate" in labels:
+        continue  # human gates aren't work-tasks — exempt from the worker-contract
     md = it.get("metadata") or {}
     if isinstance(md, str):
         try:
