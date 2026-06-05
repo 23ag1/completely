@@ -2,34 +2,56 @@
 # cmpl — the completely CLI (short form, like `bd` is to beads).
 # Wraps the harness shell tools. Slash equivalents: /completely:<cmd>.
 set -uo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # plugin root
+SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"   # resolve symlink/wrapper to the real file
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"            # plugin root
 S="$ROOT/scripts"
 cmd="${1:-help}"; [ $# -gt 0 ] && shift || true
 case "$cmd" in
-  sync)   exec bash "$S/sync.sh" "$@" ;;
-  doctor) exec bash "$S/doctor.sh" "$@" ;;
-  setup)  exec bash "$S/bootstrap.sh" "$@" ;;
-  lint)   exec bash "$S/lint.sh" "$@" ;;
-  emit)   exec bash "$S/emit.sh" "$@" ;;
-  test)   exec bash "$ROOT/tests/contracts.sh" "$@" ;;
-  check)  exec bash "$S/check.sh" "$@" ;;
-  quality) exec bash "$S/scaffold-quality.sh" "$@" ;;
+  # plan & execute
   plan-apply) exec bash "$S/plan.sh" "$@" ;;
-  init)   echo "cmpl: run /completely:init inside Claude Code to scaffold this repo." ;;
-  run)    exec bash "$S/run.sh" "$@" ;;
-  update) if [ -f "$S/update.sh" ]; then exec bash "$S/update.sh" "$@"; else echo "cmpl update: planned (bd: harness-update)"; fi ;;
-  version|-V|--version) echo "completely (cmpl) v0.2 — quality-first agent harness" ;;
+  auto)    exec bash "$S/run.sh" --mode unattended "$@" ;;   # AUTONOMOUS (fresh -p per task)
+  control) exec bash "$S/run.sh" --mode supervised "$@" ;;   # UNDER CONTROL (human-gated)
+  run)     exec bash "$S/run.sh" "$@" ;;                      # generic (auto/control are aliases)
+  # quality
+  check)   exec bash "$S/check.sh" "$@" ;;
+  lint)    exec bash "$S/lint.sh" "$@" ;;
+  quality) exec bash "$S/scaffold-quality.sh" "$@" ;;
+  test)    exec bash "$ROOT/tests/contracts.sh" "$@" ;;
+  # setup & maintenance
+  setup)   exec bash "$S/bootstrap.sh" "$@" ;;
+  doctor)  exec bash "$S/doctor.sh" "$@" ;;
+  update)  exec bash "$S/update.sh" "$@" ;;
+  # migration (legacy markdown -> Beads, one-time)
+  sync)    exec bash "$S/sync.sh" "$@" ;;
+  emit)    exec bash "$S/emit.sh" "$@" ;;
+  init)    echo "cmpl: run /completely:init inside Claude Code to scaffold this repo." ;;
+  version|-V|--version) echo "completely (cmpl) v0.5 — quality-first agent harness" ;;
   help|-h|--help)
     cat <<'USAGE'
 completely — quality-first agent harness.  Short CLI: cmpl
 
-  cmpl sync [dir] [files...]  Migrate markdown task state -> Beads (idempotent)
-  cmpl doctor                 Check upstream versions + overlay health
-  cmpl init / run             (use /completely:init , /completely:run in Claude Code)
-  cmpl update                 Re-pull upstreams, re-apply overlays, re-sync
-  cmpl version
+  PLAN & RUN
+    cmpl plan-apply        materialize a structured plan (JSON on stdin) -> Beads
+    cmpl auto              run AUTONOMOUSLY (fresh claude -p per task, stops when queue empty)
+    cmpl control           run UNDER CONTROL (supervised, human gates / checkpoints)
+    cmpl run [--mode ...]  generic driver (auto/control are the simple aliases)
 
-Slash: /completely  /completely:init  /completely:sync  /completely:run  /completely:doctor
+  QUALITY
+    cmpl check [dir]       run all checks in one pass; "clean" or only the failure
+    cmpl lint              enforce the worker-contract on Beads tasks
+    cmpl quality [dir]     install a pre-commit gate + starter lint configs
+    cmpl test              run the contract regression suite
+
+  SETUP & MAINTENANCE
+    cmpl setup [--install] verify / install deps + wire project Beads
+    cmpl doctor            upstream version drift + overlay quarantine
+    cmpl update            re-check + re-sync after upstreams change
+
+  MIGRATION (one-time, legacy markdown -> Beads)
+    cmpl sync [dir]        import markdown checkbox plans
+    cmpl emit <PLAN.md>    import an existing GSD PLAN.md
+
+Slash: /completely:auto  /completely:control  /completely:plan  /completely:check  /completely:init
 USAGE
     ;;
   *) echo "cmpl: unknown subcommand '$cmd' (try: cmpl help)" >&2; exit 1 ;;

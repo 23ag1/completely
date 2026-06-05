@@ -30,20 +30,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-echo "==> installing harness core into $DEST"
+echo "==> installing the full harness into $DEST"
 mkdir -p "$DEST"
-cp -f "$SRC/plugin/hooks/quality-gate.sh"   "$DEST/quality-gate.sh"
-cp -f "$SRC/plugin/hooks/guard-dangerous.sh" "$DEST/guard-dangerous.sh"
-chmod +x "$DEST/quality-gate.sh" "$DEST/guard-dangerous.sh"
-mkdir -p "$DEST/core"      && cp -f "$SRC/plugin/core/"* "$DEST/core/" 2>/dev/null || true
+cp -rf "$SRC/plugin/." "$DEST/"            # full tree: bin, scripts, overlays, templates, tests, hooks, core, ...
+chmod +x "$DEST/scripts/"*.sh "$DEST/bin/cmpl" 2>/dev/null || true
 mkdir -p "$HOME/.claude/agents" && cp -f "$SRC/plugin/agents/evaluator.md" "$HOME/.claude/agents/evaluator.md"
-# scripts + the short `cmpl` CLI (like `bd` is to beads)
-mkdir -p "$DEST/scripts" && cp -f "$SRC/plugin/scripts/"*.sh "$DEST/scripts/" && chmod +x "$DEST/scripts/"*.sh
-cp -f "$SRC/plugin/versions.lock" "$DEST/versions.lock" 2>/dev/null || true
+# put the FULL cmpl on PATH via a wrapper (not a stripped shim)
 BIN="${HARNESS_BIN:-$HOME/.local/bin}"; mkdir -p "$BIN"
-printf '#!/usr/bin/env bash\nROOT=%s\ncase "${1:-help}" in\n  sync) shift; exec bash "$ROOT/scripts/sync.sh" "$@";;\n  doctor) shift; exec bash "$ROOT/scripts/doctor.sh" "$@";;\n  *) echo "cmpl: sync | doctor  (full CLI ships with the completely plugin)";;\nesac\n' "$DEST" > "$BIN/cmpl"
+printf '#!/usr/bin/env bash\nexec bash "%s" "$@"\n' "$DEST/bin/cmpl" > "$BIN/cmpl"
 chmod +x "$BIN/cmpl"
-echo "    gates + evaluator + core + scripts installed; 'cmpl' -> $BIN/cmpl (ensure $BIN is on PATH)."
+echo "    full harness installed; 'cmpl' -> $BIN/cmpl (ensure $BIN is on PATH)."
 
 if [ -n "$PROJECT" ]; then
   [ -d "$PROJECT" ] || { echo "no such project dir: $PROJECT" >&2; exit 1; }

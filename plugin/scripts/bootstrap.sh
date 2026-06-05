@@ -66,6 +66,17 @@ install_one() {
 REQUIRED="bd"
 OPTIONAL="gsd claude-mem ralph"
 
+# ensure the FULL cmpl is on PATH (the plugin doesn't add bin/ to PATH itself — this is the fix
+# for the "cmpl is only the minimal sync|doctor build" bug). Runs on the Setup hook + cmpl setup.
+FULL_CMPL="$ROOT/bin/cmpl"
+if [ -f "$FULL_CMPL" ]; then
+  BINDIR="${HARNESS_BIN:-$HOME/.local/bin}"; mkdir -p "$BINDIR"
+  if ! grep -q "$FULL_CMPL" "$BINDIR/cmpl" 2>/dev/null; then
+    printf '#!/usr/bin/env bash\nexec bash "%s" "$@"\n' "$FULL_CMPL" > "$BINDIR/cmpl" && chmod +x "$BINDIR/cmpl"
+    echo "== cmpl: full CLI linked -> $BINDIR/cmpl (ensure $BINDIR is on PATH) =="
+  fi
+fi
+
 echo "== upstreams =="
 missing=""
 for d in $REQUIRED $OPTIONAL; do
