@@ -59,9 +59,23 @@ for it in d:
     echo "     verify it, then: bd close <id>  (downstream waves stay blocked until then)"
     exit 0
   fi
-  echo "  ready front:"; bd ready 2>/dev/null | grep -v 'epic]' | sed -n '1,6p'
-  echo "  → run this wave (GSD wave-subagents, or one task at a time). Gates pause automatically;"
-  echo "    quality hooks + evaluator run underneath; status + evidence stay in Beads."
+  NEXT="$(bd ready --json 2>/dev/null | python3 -c '
+import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+d=d if isinstance(d,list) else d.get("issues",[])
+for it in d:
+    if it.get("issue_type")=="epic": continue
+    if "checkpoint" in (it.get("labels") or []): continue
+    print(it["id"]); break
+')"
+  if [ -z "$NEXT" ]; then echo "  bd ready is empty — nothing to do."; exit 0; fi
+  echo "  next task: $NEXT — its contract:"
+  bd show "$NEXT" 2>/dev/null | sed -n '1,18p' | sed 's/^/    /'
+  echo "  → run the FULL task engine on THIS ONE task (skill /completely:control · core/task-engine.md):"
+  echo "    understand(map/research) → plan-check → parallel subagents (merge-slot) → TDD + craft skills"
+  echo "    → cmpl check + cmpl lint → code-reviewer + security-reviewer → gsd-verifier + evaluator"
+  echo "    → evidence comment → bd close (only if ACCEPTED). Pause at gates; STOP after this one task."
   exit 0
 fi
 

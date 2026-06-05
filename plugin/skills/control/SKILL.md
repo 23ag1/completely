@@ -1,15 +1,21 @@
 ---
 name: completely:control
-description: Run completely UNDER CONTROL — supervised execution of the Beads queue with human gates at checkpoints (no context clearing; you review between steps). Use for ambiguous, architectural, or first-of-kind work where you want to stay in the loop. Backed by `cmpl control`.
-version: 0.5.0
+description: Run completely UNDER CONTROL — execute the SINGLE next Beads task through the FULL task engine (understand → map → plan-check → parallel subagents → TDD → checks → reviewers → verifier → evaluator → debug-on-fail → evidence → close), in this session, showing every step and subagent result and pausing at human gates. One task done excellently, then stop — you decide whether to continue. control = one observed step of auto, same engine, no cuts.
+version: 0.6.0
 user-invocable: true
-argument-hint: ""
 ---
-**Under-control mode.** Run `cmpl control` from the repo root.
+Execute the **single next `bd ready` task** — exactly ONE — through the full task engine
+(`core/task-engine.md`), in this session, with maximum observation and control.
 
-- Shows the ready front (from `bd swarm status` / `bd ready`) and PAUSES on human checkpoints (⏸)
-  — you verify, then `bd close <id>` to release the downstream wave.
-- Same context throughout (no fresh-`-p` clearing); you review between tasks.
-- Quality hooks + the default-FAIL evaluator run underneath; status + evidence stay in Beads.
+Follow steps 0–10 of the engine for that one task:
+claim → understand (spawn gsd-codebase-mapper / gsd-phase-researcher as needed) → plan-check
+(goal-backward) → decompose & spawn subagents in parallel where write-zones are disjoint (serialize
+with `bd merge-slot`) → TDD + craft skills → `cmpl check` + `cmpl lint` → spawn code-reviewer +
+security-reviewer → gsd-verifier + the default-FAIL evaluator → gsd-debugger on repeated failure →
+evidence comment → `bd close` only if ACCEPTED.
 
-Use this when the spec isn't fully frozen or the work is architectural. For hands-off, use **/completely:auto**.
+Show me each subagent's result. PAUSE at any human gate (checkpoint) and at STOP-conditions. After
+the one task closes, STOP and report — I decide whether to run the next.
+
+This is **identical to one iteration of `/completely:auto`** — same full engine — just observed and
+one-at-a-time. Nothing is reduced.
