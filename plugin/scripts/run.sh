@@ -419,7 +419,7 @@ i=0; stall=0; STALL_MAX="${CMP_STALL:-3}"; prev_closed="$(closed_count)"
 # zones currently in flight, as a JSON array of arrays — fed to dispatch_ids each iteration.
 running_zones_json() {
   local pid lines=""
-  for pid in ${!PID_ZONE[@]+"${!PID_ZONE[@]}"}; do
+  for pid in "${!PID_ZONE[@]}"; do
     lines+="${PID_ZONE[$pid]}"$'\n'
   done
   printf '%s' "$lines" | python3 -c '
@@ -435,8 +435,10 @@ print(json.dumps(xs))'
 reap_finished() {
   # Walk our tracked PIDs once; any that are no longer alive get reaped.
   local pid
-  # `${!PID_TASK[@]+...}` keeps `set -u` happy when the map has never been written to.
-  for pid in ${!PID_TASK[@]+"${!PID_TASK[@]}"}; do
+  # Iterate tracked PIDs (assoc-array keys). Arrays are declared (=()), so "${!m[@]}" is empty-safe
+  # under `set -u` on bash 4.4+. The old ${!m[@]+...} guard mis-parsed as indirect expansion and fed
+  # task-ids in as a variable name — THE parallel-dispatch crash ("invalid variable name").
+  for pid in "${!PID_TASK[@]}"; do
     if ! kill -0 "$pid" 2>/dev/null; then
       local tid="${PID_TASK[$pid]}" log="${PID_LOG[$pid]}"
       wait "$pid" 2>/dev/null || true

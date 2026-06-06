@@ -177,6 +177,24 @@ else
   no "cmpl run dispatcher self-test"
 fi
 
+echo "== run parallel spawn loop (real dispatch+reap, mock worker — no LLM) =="
+# Integration test: the dispatcher UNIT (self-test) passed while the BASH spawn/reap loop that
+# consumes its output crashed at runtime ("invalid variable name" iterating the PID maps). This
+# drives the real loop with a mock worker (CMP_CLAUDE_CMD=true) on two disjoint tasks.
+PD=$(mktmp)
+( cd "$PD" && git -c user.email=t@t -c user.name=t commit -qm init --allow-empty >/dev/null 2>&1
+  bd create "A" -t task --acceptance a --design d --metadata '{"write_zone":["a.txt"]}' >/dev/null 2>&1
+  bd create "B" -t task --acceptance a --design d --metadata '{"write_zone":["b.txt"]}' >/dev/null 2>&1 )
+PDOUT=$( cd "$PD" && CMP_CLAUDE_CMD='true' CMP_PARALLEL=2 CMP_STALL=1 timeout 60 bash "$ROOT/scripts/run.sh" --mode unattended 2>&1 )
+if printf '%s' "$PDOUT" | grep -qiE 'invalid variable|: line [0-9]+:|syntax error'; then
+  no "run parallel spawn loop crashes ($(printf '%s' "$PDOUT" | grep -iE 'invalid variable|line [0-9]' | head -1))"
+elif printf '%s' "$PDOUT" | grep -q 'done after'; then
+  ok "run parallel spawn loop: disjoint workers dispatched + reaped, no crash"
+else
+  no "run parallel spawn loop did not complete cleanly"
+fi
+rm -rf "$PD"
+
 echo "== doctor =="
 bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1 && ok "doctor runs" || no "doctor runs"
 
