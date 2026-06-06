@@ -99,6 +99,9 @@ print(vals[0] if vals else "")' )
 [ "$AC" = "v2" ] && ok "plan-apply reconciles changed acceptance" || no "plan-apply reconcile (got: $AC)"
 rm -rf "$D"
 
+echo "== bench harness (mock, no LLM spend) =="
+if bash "$ROOT/tests/bench-mock.sh" >/dev/null 2>&1; then ok "cmpl bench: worktree/judge/cost/CSV/\$per-passed green"; else no "cmpl bench mock-harness failed"; fi
+
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
 skip "two independent streams actually spawn in parallel"

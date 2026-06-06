@@ -99,7 +99,14 @@ while true; do
     break
   fi
   # shellcheck disable=SC2086
-  cat "$PROMPT" | $CLAUDE_CMD 2>&1 | tail -8 || true
+  if [ -n "${CMP_BENCH_LOG:-}" ]; then
+    # bench mode: capture the inner agent's JSON result (claude -p --output-format json) so the bench
+    # harness can sum cost for the 'completely' arm. Still show a tail for the operator.
+    _out="$(cat "$PROMPT" | $CLAUDE_CMD 2>/dev/null)"; printf '%s\n' "$_out" >> "$CMP_BENCH_LOG"
+    printf '%s\n' "$_out" | tail -8
+  else
+    cat "$PROMPT" | $CLAUDE_CMD 2>&1 | tail -8 || true
+  fi
   # push only when asked (CMP_PUSH=1) — default is local commits, so a half-done run never
   # pushes broken intermediate state to the remote.
   [ "${CMP_PUSH:-0}" = 1 ] && { git push >/dev/null 2>&1 || true; }

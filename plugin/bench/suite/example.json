@@ -1,0 +1,13 @@
+{
+  "name": "search-metrics",
+  "base": "HEAD",
+  "prompt": "Implement precision_at_k and recall_at_k in backend/app/modules/search/metrics.py with pytest tests; keep coverage >= 80%.",
+  "files": [
+    "backend/app/modules/search/metrics.py",
+    "backend/app/modules/search/tests/test_search_metrics.py"
+  ],
+  "judge": [
+    { "type": "command", "command": "cd backend && pytest tests/test_search_metrics.py -q" },
+    { "type": "grep", "pattern": "precision_at_k|recall_at_k", "files": "backend/app/modules/search/metrics.py" }
+  ]
+}
