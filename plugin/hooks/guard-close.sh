@@ -28,7 +28,7 @@ fi
 [ -z "$CMD" ] && exit 0
 
 # Only gate task-closing commands; everything else passes through.
-printf '%s' "$CMD" | grep -qiE 'bd[[:space:]]+close([[:space:]]|$)|--status[[:space:]]+closed' || exit 0
+printf '%s' "$CMD" | grep -qiE 'bd[[:space:]]+close([[:space:]]|$)|--status[[:space:]=]+closed' || exit 0
 
 [ "${CMP_ALLOW_DIRTY_CLOSE:-0}" = 1 ] && exit 0
 

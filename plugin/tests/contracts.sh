@@ -34,6 +34,7 @@ gco(){ printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys;pri
 [ "$(gc 'bd ready')" = 0 ]       && ok "gate ignores non-close bd commands"   || no "close gate over-broad"
 ( cd "$GD" && echo x > f.txt && git add f.txt )
 [ "$(gc 'bd close abc-1')" = 2 ] && ok "close BLOCKED on uncommitted tracked changes" || no "close dirty block"
+[ "$(gc 'bd update abc-1 --status=closed')" = 2 ] && ok "gate also catches --status=closed (equals form)" || no "close equals-form block"
 [ "$(gco 'bd close abc-1')" = 0 ] && ok "CMP_ALLOW_DIRTY_CLOSE overrides the gate" || no "close override"
 rm -rf "$GD"
 
