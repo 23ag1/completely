@@ -25,7 +25,7 @@ case "$cmd" in
   sync)    exec bash "$S/sync.sh" "$@" ;;
   emit)    exec bash "$S/emit.sh" "$@" ;;
   init)    echo "cmpl: run /completely:init inside Claude Code to scaffold this repo." ;;
-  version|-V|--version) echo "completely (cmpl) v0.6 — quality-first agent harness" ;;
+  version|-V|--version) echo "completely (cmpl) v0.7 — quality-first agent harness" ;;
   help|-h|--help)
     cat <<'USAGE'
 completely — quality-first agent harness.  Short CLI: cmpl

@@ -6,9 +6,9 @@ Beads is the single source of truth — never track work in markdown.
 
 0. CLAIM: `bd ready --json` → highest-priority unblocked task → `bd update <id> --claim`. Read its
    acceptance, design, metadata.write_zone, metadata.verify. If the next ready item is a human gate
-   (label `checkpoint`) → STOP (a human must close it). Don't touch files outside the write-zone.
+   (label `checkpoint`) → STOP (a human must close it). Stay inside the write-zone.
 1. UNDERSTAND: unfamiliar code → spawn gsd-codebase-mapper; unclear approach/new lib → spawn
-   gsd-phase-researcher (+ Context7 for fresh docs). Don't guess.
+   gsd-phase-researcher (+ Context7). Don't guess.
 2. PLAN-CHECK (goal-backward): acceptance user-observable? deps ok? artifacts wired? scope sane?
    Too big/ambiguous → split via `cmpl plan-apply` or return blocked.
 3. DECOMPOSE: independent sub-streams with disjoint write-zones → spawn subagents in PARALLEL
@@ -19,9 +19,15 @@ Beads is the single source of truth — never track work in markdown.
 6. REVIEW: spawn code-reviewer + security-reviewer subagents; fix what they flag.
 7. VERIFY: gsd-verifier (goal achieved, not just "done") → then the evaluator agent (read-only,
    default-FAIL): every criterion FAIL until proven by evidence you ran. A single FAIL → not done.
-8. DEBUG on repeated failure (≥3): spawn gsd-debugger (scientific method). Don't thrash.
-9. CLOSE: `bd comment <id>` with the exact verify command + output (+ subagent verdicts);
-   `bd close <id>` ONLY if the evaluator ACCEPTED; commit with the task id.
+8. DEBUG on repeated failure (>=3): spawn gsd-debugger (scientific method). Don't thrash.
+9. LAND — **commit BEFORE close**, in this EXACT order (so an interruption never leaves a closed
+   bead with uncommitted code):
+   a) `bd comment <id>` with the verify command + its output (+ subagent verdicts);
+   b) `git add <write-zone files>` then `git commit -m "... (<id>)"` — and CONFIRM the commit landed
+      (e.g. `git log -1` shows it). If the commit is blocked (shared-tree gate, etc.) → fix it or
+      return blocked; do NOT close the bead.
+   c) ONLY after the commit landed AND the evaluator ACCEPTED → `bd close <id>`.
 10. STOP-conditions → `bd update <id> --status blocked` + comment the reason. NEVER a silent stub.
 
-Spawn the named subagents — don't do their job in your head. Full detail: core/task-engine.md.
+ONE task per iteration, then exit. Spawn the named subagents — don't do their job in your head.
+Full detail: core/task-engine.md.

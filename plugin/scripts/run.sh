@@ -95,6 +95,8 @@ while true; do
   fi
   # shellcheck disable=SC2086
   cat "$PROMPT" | $CLAUDE_CMD 2>&1 | tail -8 || true
-  git push >/dev/null 2>&1 || true
+  # push only when asked (CMP_PUSH=1) — default is local commits, so a half-done run never
+  # pushes broken intermediate state to the remote.
+  [ "${CMP_PUSH:-0}" = 1 ] && { git push >/dev/null 2>&1 || true; }
   if [ "$MAX" -gt 0 ] && [ "$i" -ge "$MAX" ]; then echo "run: reached max $MAX iteration(s)."; break; fi
 done

@@ -42,8 +42,11 @@ and the craft skills.
 8. **DEBUG on failure.** Tests/checks fail repeatedly (≥3)? Spawn **gsd-debugger** (scientific
    method, persistent session) — don't thrash, don't disable the test.
 
-9. **CLOSE with evidence.** `bd comment <id>` with the exact verify command + its output (+ the
-   subagent verdicts). `bd close <id>` ONLY if the evaluator ACCEPTED. Commit with the task id.
+9. **LAND — commit BEFORE close** (so an interruption never leaves a closed bead with uncommitted
+   code). In this EXACT order: (a) `bd comment <id>` with the verify command + output + subagent
+   verdicts; (b) `git add` the write-zone and `git commit -m "... (<id>)"`, and CONFIRM it landed
+   (if the commit is blocked by a shared-tree gate, fix it or return blocked — do NOT close);
+   (c) ONLY after the commit landed AND the evaluator ACCEPTED → `bd close <id>`.
 
 10. **STOP-conditions** (spec ambiguity / scope beyond write-zone / cannot build full version /
     security finding / repeated failure / architecture fork) → `bd update <id> --status blocked` +
