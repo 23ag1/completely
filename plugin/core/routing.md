@@ -16,6 +16,10 @@ the canonical for the task's intent and records it in the task `metadata.skills`
 | security | `security-reviewer` agent | built-in `/security-review` |
 | UI craft | `/impeccable`, `/ui-ux-pro-max` | the design-skill family |
 | migrate md→bd | `/completely:sync` | — |
+| reasoning at decisions | GSD **thinking-models** (`references/thinking-models-*.md`) | ad-hoc "think harder" |
+| spec / UI / security / eval *phase* | `/gsd-spec-phase` / `/gsd-ui-phase` / `/gsd-secure-phase` / `/gsd-eval-review` | rolling them by hand |
+| which craft tool for THIS stack | **`cmpl craft`** (the resolver) | hardcoding per stack |
+| token compaction | rtk (input) · `/caveman` (output) | — |
 
 Rule: never invoke two skills for the same intent. If a user skill already covers an intent,
 prefer it (see init's compose rule) and record the choice in routing.

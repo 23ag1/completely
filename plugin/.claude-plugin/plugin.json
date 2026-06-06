@@ -1,6 +1,6 @@
 {
   "name": "completely",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Quality-first agent harness: deterministic quality/security gates, a default-FAIL evaluator, a no-silent-stub contract, the `cmpl` CLI, and md→Beads sync. Unifies GSD/Ralph/Beads. Stack-agnostic.",
   "author": {
     "name": "23ag1",

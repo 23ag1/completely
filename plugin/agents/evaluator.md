@@ -49,7 +49,9 @@ the specific, minimal actions needed to reach PASS. Never round up. A single FAI
 
 ## Beads acceptance-gate mode (single gate)
 When the task lives in Beads, you ARE the one acceptance gate:
-1. Read the task: `bd show <id> --json` → its `acceptance_criteria` are the criteria (default-FAIL).
+1. Read the task: `bd show <id> --json` → its `acceptance_criteria` AND `metadata.must_haves` (GSD
+   goal-backward: truths / artifacts / key_links, when present) are the criteria — all default-FAIL.
+   For must_have artifacts apply "Existence ≠ Implementation": exists → substantive → wired → functional.
 2. Read the evidence: `bd comments <id>` — the implementer must have posted the verify command
    AND its output. **No evidence comment → automatic FAIL.**
 3. Re-run the verify command yourself where possible; compare against the posted output.

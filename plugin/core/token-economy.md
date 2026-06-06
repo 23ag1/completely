@@ -14,4 +14,9 @@ Load the least context that still produces the right outcome.
 - **Scripts over MCP when a shell will do.** If the agent has a terminal, a small command is cheaper
   than an always-loaded MCP tool. Reserve MCP for what a script can't do (a live browser, a remote API).
 - **Fresh context per task** beats one long session: re-read only what the task needs.
+- **Compaction tools (optional, routed via `cmpl craft`):** **rtk** wraps dev commands (git/pytest/
+  ruff/grep) and compresses their output before the agent reads it — cuts *input* tokens, the bigger
+  lever. **caveman** keeps the agent's *output* terse. Both local, no key; absent → no-op.
+  ⚠️ rtk rewrites command output — keep it away from gate parsers (`cmpl check`/`lint`) or verify
+  they still parse. Quantify any saving with `cmpl bench` (rtk on/off), never assume.
 - Config knob: `completely.toml [tools] lazy = true` documents deferring heavy surfaces.

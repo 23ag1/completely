@@ -17,8 +17,9 @@ case "$cmd" in
   lint)    exec bash "$S/lint.sh" "$@" ;;
   quality) exec bash "$S/scaffold-quality.sh" "$@" ;;
   test)    exec bash "$ROOT/tests/contracts.sh" "$@" ;;
-  # measure
+  # measure & route
   bench)   exec python3 "$S/bench.py" "$@" ;;
+  craft)   exec python3 "$S/craft.py" "$@" ;;
   # setup & maintenance
   setup)   exec bash "$S/bootstrap.sh" "$@" ;;
   doctor)  exec bash "$S/doctor.sh" "$@" ;;
@@ -27,7 +28,7 @@ case "$cmd" in
   sync)    exec bash "$S/sync.sh" "$@" ;;
   emit)    exec bash "$S/emit.sh" "$@" ;;
   init)    echo "cmpl: run /completely:init inside Claude Code to scaffold this repo." ;;
-  version|-V|--version) echo "completely (cmpl) v0.10 — quality-first agent harness" ;;
+  version|-V|--version) echo "completely (cmpl) v0.11 — quality-first agent harness" ;;
   help|-h|--help)
     cat <<'USAGE'
 completely — quality-first agent harness.  Short CLI: cmpl
@@ -44,8 +45,9 @@ completely — quality-first agent harness.  Short CLI: cmpl
     cmpl quality [dir]     install a pre-commit gate + starter lint configs
     cmpl test              run the contract regression suite
 
-  MEASURE
+  MEASURE & ROUTE
     cmpl bench [--tasks D]  measure quality/$ WITH vs WITHOUT completely (arms x repeats, $/passed)
+    cmpl craft [path]       detect stack/domain -> recommend the existing craft tools to invoke
 
   SETUP & MAINTENANCE
     cmpl setup [--install] verify / install deps + wire project Beads

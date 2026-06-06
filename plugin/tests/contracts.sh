@@ -102,6 +102,9 @@ rm -rf "$D"
 echo "== bench harness (mock, no LLM spend) =="
 if bash "$ROOT/tests/bench-mock.sh" >/dev/null 2>&1; then ok "cmpl bench: worktree/judge/cost/CSV/\$per-passed green"; else no "cmpl bench mock-harness failed"; fi
 
+echo "== craft router (stack -> existing tools) =="
+if bash "$ROOT/tests/craft-mock.sh" >/dev/null 2>&1; then ok "cmpl craft: stack-aware routing to existing specialists"; else no "cmpl craft router failed"; fi
+
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
 skip "two independent streams actually spawn in parallel"
