@@ -25,5 +25,13 @@ echo "$JP" | grep -qi 'thinking-models' && ok "always routes GSD thinking-models
 echo "$JP" | grep -qi 'evaluator'       && ok "verify routes default-FAIL evaluator" || no "evaluator routed"
 echo "$JP" | grep -qi 'security'        && ok "always routes security review"   || no "security routed"
 
+# --- plugin-shipped tools must resolve as INSTALLED, not falsely circle-marked ---
+echo "$JP" | python3 -c 'import json,sys
+d=json.load(sys.stdin)
+tools=[t for c in d["concerns"].values() for t in c]
+ev=[t for t in tools if t["tool"].startswith("evaluator")]
+sys.exit(0 if (ev and ev[0]["installed"] is True) else 1)' \
+  && ok "plugin-shipped evaluator detected installed (not false-circle)" || no "evaluator install-detection (plugin root)"
+
 echo "craft-mock: $pass passed, $fail failed"
 [ "$fail" = 0 ]

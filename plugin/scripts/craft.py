@@ -8,6 +8,7 @@ This is what makes the harness stack-agnostic: the recipe asks `cmpl craft`, it 
 
 Usage: cmpl craft [path] [--json]
 """
+
 import argparse
 import glob
 import json
@@ -16,6 +17,12 @@ import shutil
 import sys
 
 HOME = os.path.expanduser("~")
+# completely ships its OWN agents/skills (e.g. the evaluator) inside the plugin tree; resolve the
+# plugin root from this file's location (CLAUDE_PLUGIN_ROOT is unset under the plain CLI) so the
+# install column doesn't falsely mark plugin-bundled tools as absent.
+PLUGIN_ROOT = os.environ.get("CLAUDE_PLUGIN_ROOT") or os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))
+)
 
 
 def detect(path):
@@ -35,12 +42,27 @@ def detect(path):
             pkgtext = open(pkg).read()
         except OSError:
             pass
-    front_fw = any(s in pkgtext for s in
-                   ('"react"', '"vue"', '"svelte"', '"next"', '"@angular', '"solid-js"', '"nuxt"'))
-    if front_fw or globs("*.tsx", "*.jsx", "*.vue", "*.svelte") or \
-            has("tailwind.config.js", "tailwind.config.ts"):
+    front_fw = any(
+        s in pkgtext
+        for s in (
+            '"react"',
+            '"vue"',
+            '"svelte"',
+            '"next"',
+            '"@angular',
+            '"solid-js"',
+            '"nuxt"',
+        )
+    )
+    if (
+        front_fw
+        or globs("*.tsx", "*.jsx", "*.vue", "*.svelte")
+        or has("tailwind.config.js", "tailwind.config.ts")
+    ):
         tags.add("frontend")
-    if has("pyproject.toml", "requirements.txt", "setup.py", "setup.cfg") or globs("*.py"):
+    if has("pyproject.toml", "requirements.txt", "setup.py", "setup.cfg") or globs(
+        "*.py"
+    ):
         tags.add("python")
     if has("go.mod"):
         tags.add("go")
@@ -50,7 +72,11 @@ def detect(path):
         tags.add("jvm")
     if os.path.exists(pkg) and not front_fw:
         tags.add("node")
-    if globs("*.sql") or has("alembic.ini") or os.path.isdir(os.path.join(path, "migrations")):
+    if (
+        globs("*.sql")
+        or has("alembic.ini")
+        or os.path.isdir(os.path.join(path, "migrations"))
+    ):
         tags.add("db")
     return tags
 
@@ -60,46 +86,97 @@ def avail(spec):
     if ":" not in spec:
         return spec, None
     kind, name = spec.split(":", 1)
+    # `name` may carry a human description ("evaluator (default-FAIL...)", "rtk -> ...",
+    # "/gsd-plan-phase -> cmpl plan-apply"); the bare identifier (first token, sans leading /) is
+    # what we look up on disk — the full descriptive name still displays.
+    parts = name.split()
+    ident = parts[0].lstrip("/") if parts else name
     if kind == "agent":
-        return name, os.path.exists(os.path.join(HOME, ".claude", "agents", name + ".md"))
+        fn = ident + ".md"
+        return name, (
+            os.path.exists(os.path.join(HOME, ".claude", "agents", fn))
+            or os.path.exists(os.path.join(PLUGIN_ROOT, "agents", fn))
+        )
     if kind == "skill":
-        n = name.lstrip("/")
-        return name, (os.path.isdir(os.path.join(HOME, ".claude", "skills", n))
-                      or os.path.exists(os.path.join(HOME, ".claude", "skills", n + ".md")))
+        return name, (
+            os.path.isdir(os.path.join(HOME, ".claude", "skills", ident))
+            or os.path.exists(os.path.join(HOME, ".claude", "skills", ident + ".md"))
+            or os.path.isdir(os.path.join(PLUGIN_ROOT, "skills", ident))
+            or os.path.exists(os.path.join(PLUGIN_ROOT, "skills", ident, "SKILL.md"))
+        )
     if kind == "bin":
-        return name, shutil.which(name) is not None
+        return name, shutil.which(ident) is not None
     if kind == "ref":
-        return name, os.path.exists(os.path.join(HOME, ".claude", "gsd-core", name))
+        return name, os.path.exists(os.path.join(HOME, ".claude", "gsd-core", ident))
     return name, None
 
 
 # concern -> (applies(tags) -> bool, [tool specs]). Tools are EXISTING ecosystem capabilities.
 RULES = [
-    ("reason",        lambda t: True,
-     ["ref:references/thinking-models-planning.md", "ref:references/thinking-models-execution.md",
-      "thinking-models: Pre-Mortem / MECE / Constraint-Analysis / Reversibility / Curse-of-Knowledge"]),
-    ("understand",    lambda t: True, ["skill:/gsd-map-codebase", "agent:gsd-codebase-mapper"]),
-    ("spec",          lambda t: True, ["skill:/gsd-spec-phase", "skill:/gsd-discuss-phase"]),
-    ("plan",          lambda t: True, ["skill:/gsd-plan-phase -> cmpl plan-apply -> Beads"]),
-    ("tdd",           lambda t: True, ["skill:/tdd"]),
-    ("test",          lambda t: "python" in t, ["pytest"]),
-    ("test",          lambda t: "node" in t or "frontend" in t, ["vitest / jest"]),
-    ("test",          lambda t: "go" in t, ["go test"]),
-    ("test",          lambda t: "rust" in t, ["cargo test"]),
-    ("ui-craft",      lambda t: "frontend" in t,
-     ["skill:/ui-ux-pro-max", "skill:/impeccable", "skill:/gsd-ui-phase", "skill:/gsd-ui-review"]),
-    ("backend-review", lambda t: "python" in t, ["agent:fastapi-reviewer", "agent:python-reviewer"]),
+    (
+        "reason",
+        lambda t: True,
+        [
+            "ref:references/thinking-models-planning.md",
+            "ref:references/thinking-models-execution.md",
+            "thinking-models: Pre-Mortem / MECE / Constraint-Analysis / Reversibility / Curse-of-Knowledge",
+        ],
+    ),
+    (
+        "understand",
+        lambda t: True,
+        ["skill:/gsd-map-codebase", "agent:gsd-codebase-mapper"],
+    ),
+    ("spec", lambda t: True, ["skill:/gsd-spec-phase", "skill:/gsd-discuss-phase"]),
+    ("plan", lambda t: True, ["skill:/gsd-plan-phase -> cmpl plan-apply -> Beads"]),
+    ("tdd", lambda t: True, ["skill:/tdd"]),
+    ("test", lambda t: "python" in t, ["pytest"]),
+    ("test", lambda t: "node" in t or "frontend" in t, ["vitest / jest"]),
+    ("test", lambda t: "go" in t, ["go test"]),
+    ("test", lambda t: "rust" in t, ["cargo test"]),
+    (
+        "ui-craft",
+        lambda t: "frontend" in t,
+        [
+            "skill:/ui-ux-pro-max",
+            "skill:/impeccable",
+            "skill:/gsd-ui-phase",
+            "skill:/gsd-ui-review",
+        ],
+    ),
+    (
+        "backend-review",
+        lambda t: "python" in t,
+        ["agent:fastapi-reviewer", "agent:python-reviewer"],
+    ),
     ("backend-review", lambda t: "db" in t, ["agent:database-reviewer"]),
-    ("review",        lambda t: True, ["agent:code-reviewer", "agent:gsd-code-reviewer"]),
-    ("readability",   lambda t: True, ["skill:/simplify", "skill:/refactor-clean"]),
-    ("security",      lambda t: True,
-     ["agent:security-reviewer", "skill:/gsd-secure-phase", "agent:gsd-security-auditor"]),
-    ("verify",        lambda t: True,
-     ["agent:gsd-verifier -> feeds evidence", "agent:evaluator (default-FAIL, reads acceptance + must_haves)"]),
-    ("eval",          lambda t: True, ["skill:/gsd-eval-review", "cmpl bench (quality/$ with-vs-without)"]),
-    ("debug",         lambda t: True, ["skill:/gsd-debug", "agent:gsd-debugger"]),
-    ("token-in",      lambda t: True, ["bin:rtk (compress tool output -> input tokens)"]),
-    ("token-out",     lambda t: True, ["skill:/caveman (terse agent output)"]),
+    ("review", lambda t: True, ["agent:code-reviewer", "agent:gsd-code-reviewer"]),
+    ("readability", lambda t: True, ["skill:/simplify", "skill:/refactor-clean"]),
+    (
+        "security",
+        lambda t: True,
+        [
+            "agent:security-reviewer",
+            "skill:/gsd-secure-phase",
+            "agent:gsd-security-auditor",
+        ],
+    ),
+    (
+        "verify",
+        lambda t: True,
+        [
+            "agent:gsd-verifier -> feeds evidence",
+            "agent:evaluator (default-FAIL, reads acceptance + must_haves)",
+        ],
+    ),
+    (
+        "eval",
+        lambda t: True,
+        ["skill:/gsd-eval-review", "cmpl bench (quality/$ with-vs-without)"],
+    ),
+    ("debug", lambda t: True, ["skill:/gsd-debug", "agent:gsd-debugger"]),
+    ("token-in", lambda t: True, ["bin:rtk (compress tool output -> input tokens)"]),
+    ("token-out", lambda t: True, ["skill:/caveman (terse agent output)"]),
 ]
 
 
@@ -125,12 +202,16 @@ def main():
     concerns = route(set(tags))
 
     if a.json:
-        print(json.dumps({"path": path, "stacks": tags, "concerns": concerns}, indent=2))
+        print(
+            json.dumps({"path": path, "stacks": tags, "concerns": concerns}, indent=2)
+        )
         return 0
 
     print(f"craft router — {path}")
     print(f"  stacks: {', '.join(tags) or '(none detected)'}")
-    print("  route each concern to its EXISTING specialist (✓ installed · ○ optional/absent):")
+    print(
+        "  route each concern to its EXISTING specialist (✓ installed · ○ optional/absent):"
+    )
     for concern, tools in concerns.items():
         print(f"  {concern}:")
         for t in tools:
