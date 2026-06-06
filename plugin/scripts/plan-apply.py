@@ -11,7 +11,9 @@ JSON schema:
   "epic": "Phase title",
   "tasks": [
     {"key":"schema","title":"...","acceptance":"...","design":"...",
-     "write_zone":["db/x.py"],"verify":"pytest -q","deps":["otherkey"],"labels":["backend"]}, ...
+     "write_zone":["db/x.py"],"verify":"pytest -q","deps":["otherkey"],"labels":["backend"],
+     "requirements":["R-01"],"must_haves":{"truths":[],"artifacts":[],"key_links":[]},
+     "read_first":["src/x.py"]}, ...
   ],
   "checkpoints": [
     {"key":"verify","title":"Human-verify X","after":"endpoint","how":"open /login"}
@@ -19,6 +21,7 @@ JSON schema:
 }
 A task may depend on a checkpoint via deps:["cp:<key>"] so downstream waits for the human gate.
 """
+
 import hashlib
 import json
 import re
@@ -68,8 +71,16 @@ def main():
     es = slug(epic_title)
     existing = load_existing()
 
-    def upsert(ref, title, typ="task", parent=None, acceptance="", design="",
-               metadata=None, labels=()):
+    def upsert(
+        ref,
+        title,
+        typ="task",
+        parent=None,
+        acceptance="",
+        design="",
+        metadata=None,
+        labels=(),
+    ):
         lab = srclabel(ref)
         if lab in existing:
             eid = existing[lab]
@@ -97,7 +108,15 @@ def main():
                 bd("update", eid, *upd)
                 return eid, "updated"
             return eid, "exists"
-        args = ["create", title, "-t", typ, "-l", ",".join([lab, *labels]), "--no-inherit-labels"]
+        args = [
+            "create",
+            title,
+            "-t",
+            typ,
+            "-l",
+            ",".join([lab, *labels]),
+            "--no-inherit-labels",
+        ]
         if parent:
             args += ["--parent", parent]
         if acceptance:
@@ -111,7 +130,10 @@ def main():
         try:
             nid = json.loads(r.stdout)["id"]
         except Exception:
-            print("  ! create failed: %s\n    %s" % (title, r.stderr.strip()), file=sys.stderr)
+            print(
+                "  ! create failed: %s\n    %s" % (title, r.stderr.strip()),
+                file=sys.stderr,
+            )
             return None, "error"
         existing[lab] = nid
         return nid, "created"
@@ -130,9 +152,21 @@ def main():
             md["write_zone"] = t["write_zone"]
         if t.get("verify"):
             md["verify"] = t["verify"]
-        nid, st = upsert("plan:%s#%s" % (es, key), t.get("title", key), parent=epic_id,
-                         acceptance=t.get("acceptance", ""), design=t.get("design", ""),
-                         metadata=md or None, labels=tuple(t.get("labels", [])))
+        if t.get("requirements"):
+            md["requirements"] = t["requirements"]
+        if t.get("must_haves"):
+            md["must_haves"] = t["must_haves"]
+        if t.get("read_first"):
+            md["read_first"] = t["read_first"]
+        nid, st = upsert(
+            "plan:%s#%s" % (es, key),
+            t.get("title", key),
+            parent=epic_id,
+            acceptance=t.get("acceptance", ""),
+            design=t.get("design", ""),
+            metadata=md or None,
+            labels=tuple(t.get("labels", [])),
+        )
         if nid:
             keymap[key] = nid
         if st == "created":
@@ -140,9 +174,14 @@ def main():
 
     for c in plan.get("checkpoints", []):
         key = c.get("key") or slug(c.get("title", "checkpoint"))
-        nid, st = upsert("plan:%s#cp-%s" % (es, key), c.get("title", "Checkpoint"), parent=epic_id,
-                         design=c.get("how", ""), metadata={"checkpoint": "human"},
-                         labels=("checkpoint",))
+        nid, st = upsert(
+            "plan:%s#cp-%s" % (es, key),
+            c.get("title", "Checkpoint"),
+            parent=epic_id,
+            design=c.get("how", ""),
+            metadata={"checkpoint": "human"},
+            labels=("checkpoint",),
+        )
         if nid:
             keymap["cp:" + key] = nid
             after = c.get("after")

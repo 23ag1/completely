@@ -195,6 +195,18 @@ print(vals[0] if vals else "")' )
 [ "$AC" = "v2" ] && ok "plan-apply reconciles changed acceptance" || no "plan-apply reconcile (got: $AC)"
 rm -rf "$D"
 
+echo "== plan-apply must_haves + requirements (bridge consumer parity) =="
+D=$(mktmp)
+printf '%s' '{"epic":"M","tasks":[{"key":"a","title":"A","acceptance":"x","design":"d","write_zone":["a"],"requirements":["R-1"],"must_haves":{"truths":["t1"]}}]}' \
+  | ( cd "$D" && bash "$ROOT/scripts/plan.sh" >/dev/null 2>&1 )
+MM=$( cd "$D" && bd list --all --json | python3 -c 'import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+m=[i.get("metadata") or {} for i in d if i.get("title")=="A"]
+m=m[0] if m else {}
+print("OK" if (m.get("must_haves") and m.get("requirements")) else "NO")' )
+[ "$MM" = OK ] && ok "plan-apply: must_haves + requirements in task metadata" || no "plan-apply must_haves/requirements ($MM)"
+rm -rf "$D"
+
 echo "== bench harness (mock, no LLM spend) =="
 if bash "$ROOT/tests/bench-mock.sh" >/dev/null 2>&1; then ok "cmpl bench: worktree/judge/cost/CSV/\$per-passed green"; else no "cmpl bench mock-harness failed"; fi
 
