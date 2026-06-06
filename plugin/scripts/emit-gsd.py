@@ -55,11 +55,34 @@ def _fm_unq(v):
     return v
 
 
+def _fm_split_inline(inner: str):
+    """Split an inline-list payload on TOP-LEVEL commas, respecting quoted regions.
+    Latent today (GSD 1.3.1 emits comma-free ids), but `[a, "b, c", d]` must not break."""
+    parts, buf, quote = [], [], None
+    for ch in inner:
+        if quote:
+            buf.append(ch)
+            if ch == quote:
+                quote = None
+        elif ch in ('"', "'"):
+            quote = ch
+            buf.append(ch)
+        elif ch == ",":
+            parts.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    if quote is not None:
+        raise ValueError("unmatched %s in inline list: %r" % (quote, inner))
+    parts.append("".join(buf))
+    return [p for p in parts if p.strip()]
+
+
 def _fm_scalar(v):
     v = v.strip()
     if v.startswith("[") and v.endswith("]"):
         inner = v[1:-1].strip()
-        return [_fm_unq(x) for x in inner.split(",") if x.strip()] if inner else []
+        return [_fm_unq(x) for x in _fm_split_inline(inner)] if inner else []
     return _fm_unq(v)
 
 
@@ -72,9 +95,17 @@ def _fm_parse(toks, i, indent):
             if ":" in body and not body.startswith("["):
                 d = {}
                 k, _, v = body.partition(":")
+                i += 1
+                # `- ` is 2 chars, so body (and thus sibling keys) sits at column indent+2.
+                # Strictly greater = nested under THIS key; equal = sibling. Off-by-one matters.
+                sibling_col = indent + 2
                 if v.strip():
                     d[k.strip()] = _fm_scalar(v)
-                i += 1
+                elif i < len(toks) and toks[i][0] > sibling_col:
+                    child, i = _fm_parse(toks, i, toks[i][0])
+                    d[k.strip()] = child
+                else:
+                    d[k.strip()] = ""
                 while (
                     i < len(toks)
                     and toks[i][0] > indent
