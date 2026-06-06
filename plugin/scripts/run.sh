@@ -25,20 +25,25 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROMPT="${CMP_RUN_PROMPT:-$ROOT/overlays/ralph/PROMPT_build.completely.md}"
 CLAUDE_CMD="${CMP_CLAUDE_CMD:-claude -p --permission-mode acceptEdits}"
-MODE=unattended; MAX=0; DRY=0; SELF_TEST=0
+MODE=unattended; MAX=0; DRY=0; SELF_TEST=0; SHOW_PROMPT_ID=""
 PARALLEL="${CMP_PARALLEL:-4}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --mode)      MODE="${2:-}"; shift 2 ;;
-    --max)       MAX="${2:-0}"; shift 2 ;;
-    --parallel)  PARALLEL="${2:-1}"; shift 2 ;;
-    --dry-run)   DRY=1; shift ;;
-    --self-test) SELF_TEST=1; shift ;;
+    --mode)         MODE="${2:-}"; shift 2 ;;
+    --max)          MAX="${2:-0}"; shift 2 ;;
+    --parallel)     PARALLEL="${2:-1}"; shift 2 ;;
+    --dry-run)      DRY=1; shift ;;
+    --self-test)    SELF_TEST=1; shift ;;
+    --show-prompt)  SHOW_PROMPT_ID="${2:-DEMO}"; shift 2 ;;
     -h|--help)
-      echo "cmpl run [--mode unattended|supervised] [--max N] [--parallel N] [--dry-run] [--self-test]"
+      echo "cmpl run [--mode unattended|supervised] [--max N] [--parallel N] [--dry-run]"
+      echo "         [--self-test] [--show-prompt <task-id>]"
       echo "  CMP_PARALLEL=N    max concurrent workers (default 4; 1 = legacy serial flow)"
       echo "  CMP_BENCH_LOG=...  forces PARALLEL=1 to avoid concurrent-write races on the log"
+      echo "  --show-prompt   prints the exact stdin a worker would receive for <task-id>"
+      echo "                  (no claim, no spawn) — trace evidence for the enforced-policy"
+      echo "                  injection at PLAN-CHECK / security step boundaries."
       exit 0 ;;
     *) echo "run: unknown arg '$1'" >&2; exit 1 ;;
   esac
@@ -144,6 +149,56 @@ zone_for() {
   CMP_READY_JSON="$1" CMP_LOOKUP_ID="$2" python3 -c "$_zone_for_py"
 }
 
+# ---------- enforced-policy injection (step-bound system-style blocks) -----------------------------
+# v0.11's weakness: thinking-models + security policy were named in task-engine.md but never delivered
+# to the worker — the worker had to read the doc, then choose to apply them. We now inject the policy
+# INLINE into the stdin prompt at spawn time, tagged to a specific step. The block text IS the rule
+# (not a pointer to a file), so the worker can't no-op past it via "I didn't read that md".
+#
+# Honest scope: this is at-spawn injection for the `claude -p` worker (single fresh prompt per task).
+# True mid-conversation injection at the actual step boundary requires the Messages API (system
+# message appended live as the worker enters step 2 / step 6) — out of scope here. The trace below
+# (--show-prompt) is the falsifiable evidence that the policy reached the worker.
+ENFORCED_PLAN_CHECK='<<COMPLETELY_ENFORCED step=plan-check policy=thinking-models-planning>>
+At STEP 2 (PLAN-CHECK) you MUST apply ALL of the following thinking-models before
+proceeding to STEP 3 (DECOMPOSE). Each counters a documented agent failure mode —
+skipping ANY is a stop-condition (`bd update --status blocked` + reason in a comment):
+  · Pre-Mortem        — name 3 ways this task could ship "done" but be broken.
+  · MECE-Decomposition — list sub-streams; verify mutually exclusive AND collectively
+                         exhaustive over the acceptance criteria + metadata.must_haves.
+  · Constraint-Analysis — name the BINDING constraint (write_zone, deps, context budget).
+  · Reversibility-Test — classify each non-trivial choice as reversible vs. one-way.
+Quote each model briefly in your plan-check comment on the bead BEFORE you start STEP 4.
+No applied model, no build.
+<<END_ENFORCED>>'
+
+ENFORCED_SECURITY='<<COMPLETELY_ENFORCED step=review policy=security>>
+At STEP 6 (REVIEW) you MUST spawn the **security-reviewer** subagent (Task tool) — not
+inline reasoning — whenever the diff touches ANY of: user-input handling, authn/authz,
+secret/token storage, SQL/shell/HTML/URL interpolation, deserialization, file ingestion,
+crypto primitives, or sandbox/permission boundaries. Treat its CRITICAL and HIGH findings
+as BLOCKING: fix in this task, or `bd update --status blocked` with the finding quoted.
+Do NOT paraphrase its verdict — quote the relevant findings on the bead in STEP 9 (LAND).
+<<END_ENFORCED>>'
+
+# Build the exact stdin a worker will receive for a given task. Pure function — no Beads writes,
+# no spawn — so it's safe to call from --show-prompt and --self-test for trace evidence.
+build_worker_prompt() {
+  # $1 = task_id
+  local tid="$1"
+  printf '<<COMPLETELY_DISPATCH>>\n'
+  printf 'Your assigned task: %s\n' "$tid"
+  printf 'The parent has ALREADY claimed it for you (bd update %s --claim).\n' "$tid"
+  printf 'Skip the selection part of step 0 — read THIS task directly:\n'
+  printf '  bd show %s\n' "$tid"
+  printf 'Then proceed step 1 (UNDERSTAND) onward. Stay inside its write-zone.\n'
+  printf 'If you cannot proceed: bd update %s --status blocked + a comment with the reason.\n' "$tid"
+  printf '<<END_DISPATCH>>\n\n'
+  printf '%s\n\n' "$ENFORCED_PLAN_CHECK"
+  printf '%s\n\n' "$ENFORCED_SECURITY"
+  cat "$PROMPT"
+}
+
 # ---------- self-test: prove disjoint-parallel + same-zone-serial WITHOUT calling claude ----------
 if [ "$SELF_TEST" = 1 ]; then
   echo "run/self-test: dispatcher unit"
@@ -208,7 +263,72 @@ if [ "$SELF_TEST" = 1 ]; then
   [ "$got" = "c-b" ] && echo "  PASS checkpoint task not dispatched (got: '$got')" \
     || { echo "  FAIL checkpoint skip (got: '$got' want 'c-b')"; fail=1; }
 
+  # Case 8: enforced-policy injection — both step blocks must appear in the worker prompt and must
+  # carry the right step tag, the right policy tag, and inline rule text (not just a ref to an md file).
+  # If a prompt file is missing we still PASS the structural assertions (the blocks come from run.sh,
+  # not from the overlay) but skip the trailing `cat $PROMPT` content check.
+  if [ ! -f "$PROMPT" ]; then
+    echo "  WARN overlay prompt missing ($PROMPT) — checking injected blocks only" >&2
+    inj="$(PROMPT=/dev/null build_worker_prompt T1)"
+  else
+    inj="$(build_worker_prompt T1)"
+  fi
+  # Each substring must lie on a single line (grep -F is line-oriented).
+  has() { printf '%s' "$inj" | grep -qF "$1"; }
+  miss=""
+  for s in \
+    '<<COMPLETELY_ENFORCED step=plan-check' \
+    '<<COMPLETELY_ENFORCED step=review' \
+    'policy=thinking-models-planning' \
+    'policy=security' \
+    'Pre-Mortem' \
+    'MECE-Decomposition' \
+    'Constraint-Analysis' \
+    'Reversibility-Test' \
+    'security-reviewer' \
+    'CRITICAL' \
+    'BLOCKING' \
+    '<<END_ENFORCED>>' \
+    '<<COMPLETELY_DISPATCH>>' \
+    'Your assigned task: T1'; do
+    has "$s" || miss+="    · $s
+"
+  done
+  if [ -z "$miss" ]; then
+    echo "  PASS enforced-policy injection: both step blocks present with rule text"
+  else
+    echo "  FAIL enforced-policy injection — missing markers:"
+    printf '%s' "$miss"
+    fail=1
+  fi
+  # Ordering matters: dispatch header BEFORE policy BEFORE overlay — keeps the worker's reading
+  # cadence stable (who am I → what's enforced → how to run the engine).
+  if [ -f "$PROMPT" ]; then
+    p_dispatch="$(printf '%s' "$inj" | grep -n '<<COMPLETELY_DISPATCH>>' | head -1 | cut -d: -f1)"
+    p_plan="$(printf '%s' "$inj" | grep -n '<<COMPLETELY_ENFORCED step=plan-check' | head -1 | cut -d: -f1)"
+    p_sec="$(printf '%s' "$inj" | grep -n '<<COMPLETELY_ENFORCED step=review' | head -1 | cut -d: -f1)"
+    if [ -n "$p_dispatch" ] && [ -n "$p_plan" ] && [ -n "$p_sec" ] \
+       && [ "$p_dispatch" -lt "$p_plan" ] && [ "$p_plan" -lt "$p_sec" ]; then
+      echo "  PASS enforced-policy ordering: dispatch < plan-check < review"
+    else
+      echo "  FAIL enforced-policy ordering (dispatch=$p_dispatch plan=$p_plan review=$p_sec)"
+      fail=1
+    fi
+  fi
+
   if [ "$fail" = 0 ]; then echo "run/self-test: OK"; exit 0; else echo "run/self-test: FAILED"; exit 1; fi
+fi
+
+# --show-prompt: trace evidence — print the exact stdin a worker would receive, no side effects.
+# Runs before the bd / .beads preflight so it works in any directory (testable without a repo).
+if [ -n "$SHOW_PROMPT_ID" ]; then
+  if [ ! -f "$PROMPT" ]; then
+    echo "run: overlay prompt missing: $PROMPT — printing injected header + policy only" >&2
+    PROMPT=/dev/null build_worker_prompt "$SHOW_PROMPT_ID"
+  else
+    build_worker_prompt "$SHOW_PROMPT_ID"
+  fi
+  exit 0
 fi
 
 command -v bd >/dev/null 2>&1 || { echo "run: bd (beads) not installed" >&2; exit 1; }
@@ -282,22 +402,11 @@ print(len(d if isinstance(d,list) else d.get("issues",[])))'; }
 
 # ---------- worker spawn (one fresh claude -p; reads the assigned task ID from injected header) ----
 # We pre-claim the task in the parent so concurrent workers can't race for the same ready item, then
-# prepend a small header to the overlay prompt over stdin. The header is the source of truth for
-# WHICH task the worker should work on — the rest of the prompt (step 0 onward) still applies.
+# pipe the constructed prompt (dispatch header + enforced policy blocks + overlay) to stdin.
 spawn_worker() {
   # $1 = task_id  $2 = log_file_path
   local tid="$1" log="$2"
-  {
-    printf '<<COMPLETELY_DISPATCH>>\n'
-    printf 'Your assigned task: %s\n' "$tid"
-    printf 'The parent has ALREADY claimed it for you (bd update %s --claim).\n' "$tid"
-    printf 'Skip the selection part of step 0 — read THIS task directly:\n'
-    printf '  bd show %s\n' "$tid"
-    printf 'Then proceed step 1 (UNDERSTAND) onward. Stay inside its write-zone.\n'
-    printf 'If you cannot proceed: bd update %s --status blocked + a comment with the reason.\n' "$tid"
-    printf '<<END_DISPATCH>>\n\n'
-    cat "$PROMPT"
-  } | $CLAUDE_CMD >"$log" 2>&1
+  build_worker_prompt "$tid" | $CLAUDE_CMD >"$log" 2>&1
 }
 
 # ---------- main loop: rolling parallel dispatch over `bd ready` ----------

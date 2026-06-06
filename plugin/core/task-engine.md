@@ -25,9 +25,13 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
 2. **PLAN-CHECK the task (goal-backward, gsd-plan-checker's dimensions).** Is acceptance
    user-observable? write-zone correct? deps satisfied? artifacts wired (not created in isolation)?
    scope within context budget? If too big/ambiguous → split with `cmpl plan-apply`, or `blocked`.
-   Inject GSD's **planning thinking-models** here (`gsd-core/references/thinking-models-planning.md`:
-   Pre-Mortem, MECE-decomposition, Constraint-Analysis, Reversibility-Test) — each counters a
-   documented agent failure. Skip them for boilerplate (don't burn tokens — see token-economy).
+   The **planning thinking-models** (Pre-Mortem, MECE-Decomposition, Constraint-Analysis,
+   Reversibility-Test) are **ENFORCED**, not referenced: `cmpl run` injects a
+   `<<COMPLETELY_ENFORCED step=plan-check policy=thinking-models-planning>>` block into the worker's
+   stdin at spawn — the rule text travels with the prompt, not as a doc the worker chooses to read.
+   Each model counters a documented agent failure mode; skipping any is a stop-condition. Skip the
+   whole block only for boilerplate (don't burn tokens — see token-economy). Inspect the exact
+   injection a worker will see with `cmpl run --show-prompt <task-id>` (zero side effects).
 
 3. **DECOMPOSE if parallelizable.** Independent sub-streams with DISJOINT write-zones? Build a
    decomposition table and spawn **subagents in parallel** (gsd-executor pattern / Task tool), each
@@ -46,7 +50,13 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
    (lint+types+tests, one pass) and `cmpl lint` (worker-contract) MUST be green.
 
 6. **REVIEW (independent subagents).** Spawn **code-reviewer** (readability/maintainability) and
-   **security-reviewer** (injection/authz/secrets/validation) — fix what they flag.
+   **security-reviewer** (injection/authz/secrets/validation) — fix what they flag. The security
+   reviewer requirement is **ENFORCED**: `cmpl run` injects
+   `<<COMPLETELY_ENFORCED step=review policy=security>>` into the worker's prompt at spawn, listing
+   the diff-trigger surfaces (input handling, authn/authz, secrets, interpolation, deserialization,
+   file/URL ingestion, crypto, sandbox boundaries) and treating CRITICAL/HIGH findings as blocking.
+   Trace with `cmpl run --show-prompt <task-id>`. Self-test: `cmpl run --self-test` asserts both
+   enforced blocks appear in the worker prompt in the correct order (dispatch → plan-check → review).
 
 7. **VERIFY (goal + acceptance).** **gsd-verifier**: did it achieve the GOAL (not just "tasks
    done")? Then the completely **evaluator** (read-only, default-FAIL): every acceptance criterion —
