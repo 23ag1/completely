@@ -146,6 +146,15 @@ print("OK" if (any("alpha" in x for x in t) and not any("beta" in x for x in t) 
 [ "$RE" = OK ] && ok "bridge: re-emit keeps edges stable (idempotent graph)" || no "bridge re-emit idempotency ($RE)"
 rm -rf "$D"
 
+echo "== run.sh land-guard (git identity so per-task commits land) =="
+D=$(mktmp)
+( cd "$D" && bd create "t" -t task --acceptance a --design d --metadata '{"write_zone":["x"]}' >/dev/null 2>&1 )
+( cd "$D" && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null CMP_CLAUDE_CMD="true" \
+    bash "$ROOT/scripts/run.sh" --dry-run >/dev/null 2>&1 )
+GI=$( cd "$D" && GIT_CONFIG_GLOBAL=/dev/null git config user.email 2>/dev/null )
+[ -n "$GI" ] && ok "run.sh ensures a git identity before the loop ($GI)" || no "run.sh land-guard (no identity set)"
+rm -rf "$D"
+
 echo "== doctor =="
 bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1 && ok "doctor runs" || no "doctor runs"
 

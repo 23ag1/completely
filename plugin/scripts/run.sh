@@ -32,6 +32,18 @@ done
 command -v bd >/dev/null 2>&1 || { echo "run: bd (beads) not installed" >&2; exit 1; }
 [ -d .beads ] || { echo "run: no .beads here — run from a repo with 'bd init'" >&2; exit 1; }
 
+# Land-step guard: the engine commits per task BEFORE closing it (commit-before-close). With no
+# usable git author identity that commit silently fails — and a task could close with uncommitted
+# code (observed during dogfood). Ensure a repo-local identity up front so per-task commits always
+# land (override via your own git config). Deterministic preflight; per-task ordering still lives
+# in the task engine.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+   && [ -z "$(git config user.email 2>/dev/null)" ]; then
+  git config user.email "completely-agent@localhost"
+  git config user.name "completely agent"
+  echo "run: no git identity found — set repo-local fallback (completely agent) so per-task commits land."
+fi
+
 # count ready WORK (exclude the epic container itself)
 ready_count() {
   bd ready --json 2>/dev/null | python3 -c '
