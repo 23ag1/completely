@@ -81,7 +81,12 @@ fi
 
 [ -f "$PROMPT" ] || { echo "run: overlay prompt missing: $PROMPT" >&2; exit 1; }
 
-i=0
+closed_count() { bd list --status closed --json 2>/dev/null | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+print(len(d if isinstance(d,list) else d.get("issues",[])))'; }
+
+i=0; stall=0; STALL_MAX="${CMP_STALL:-3}"; prev_closed="$(closed_count)"
 while true; do
   n="$(ready_count)"; n="${n:-0}"
   if [ "$n" -le 0 ]; then echo "run: bd ready is empty — done after $i iteration(s)."; break; fi
@@ -98,5 +103,15 @@ while true; do
   # push only when asked (CMP_PUSH=1) — default is local commits, so a half-done run never
   # pushes broken intermediate state to the remote.
   [ "${CMP_PUSH:-0}" = 1 ] && { git push >/dev/null 2>&1 || true; }
+  # stall detector: bail if no task has closed for STALL_MAX iterations (a crashing/no-op worker or
+  # an unresolvable task) — don't burn the whole --max budget making zero progress.
+  now_closed="$(closed_count)"
+  if [ "${now_closed:-0}" -gt "${prev_closed:-0}" ]; then stall=0; else stall=$((stall + 1)); fi
+  prev_closed="$now_closed"
+  if [ "$stall" -ge "$STALL_MAX" ]; then
+    echo "run: no task closed in $STALL_MAX iteration(s) — stopping (stuck/crashing worker or unresolvable task)."
+    echo "     inspect 'bd list --status in_progress' for abandoned claims (reset: bd update <id> --status open)."
+    break
+  fi
   if [ "$MAX" -gt 0 ] && [ "$i" -ge "$MAX" ]; then echo "run: reached max $MAX iteration(s)."; break; fi
 done
