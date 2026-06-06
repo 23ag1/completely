@@ -25,7 +25,7 @@ No `PLAN.md`, no `STATE.md`, no `PROGRESS.md`, no `IMPLEMENTATION_PLAN.md`. Stat
 After migrating, plan with `/completely:plan` (Beads-first). Don't keep authoring markdown plans
 and re-importing them — that's the dual-representation trap this design removes.
 
-## Loop engine — decision (Ralph rejected; Dynamic Workflows is the route-to target)
+## Loop engine — decision (Ralph rejected; Dynamic Workflows also rejected as a `run.sh` replacement)
 
 `run.sh` is **Ralph's loop *shape*** (one task / fresh `claude -p` / iteration) as an OVERLAY — not a
 dependency. Replacing it with the raw Ralph plugin is **rejected**: Ralph drives off
@@ -35,5 +35,21 @@ it has no independent evaluator or commit-before-close gate. Taking it would und
 and the deterministic gates.
 
 The legitimate "don't hand-roll the loop" question targets **Claude Code Dynamic Workflows**
-(state in script vars not context, ≤16 parallel, interruption-survival) — which can keep Beads as
-the spine. That evaluation/spike is task `p4f`. Until then `run.sh` stays.
+(state in script vars not context, ≤16 parallel, in-session resume). Spike `p4f` (2026-06-06,
+evidence: `research/dw-spike-2026-06-06.md`) concluded **DW is also rejected as a `run.sh`
+replacement** — it's the wrong layer:
+
+- DW's orchestrator IS a Claude Code session, so the spine burns context every dispatch decision.
+  `run.sh`'s spine is bash + Python = ≈zero context cost. completely's whole bet is a deterministic
+  (non-LLM) spine.
+- DW resume is **in-session only** — per docs, "if you exit Claude Code while a workflow is
+  running, the next session starts the workflow fresh." completely's design is fresh-context-per-task
+  (the Ralph loop *shape*); DW's resume model actively collides with it.
+- DW is a parallel-*subagent* fan-out primitive. `run.sh` is a parallel-*process* fan-out spine
+  (greedy disjoint-`write_zone` dispatch over `bd ready`, 9/9 self-test PASS). Different problems.
+- Plus an environmental gate: DW needs Claude Code v2.1.154+; we are on v2.1.144.
+
+DW's real slot is **inside** a worker — `cmpl bench` matrix runs, `/completely:plan` decomposition,
+multi-file refactors within one task — once we are on a version that ships it. That's a separate
+bead, not a `run.sh` replacement. **`run.sh` stays as the spine.** Revisit only if all three hold:
+upgrade ≥ 2.1.154, JS API surface fully documented, a concrete worker-internal use case opens.
