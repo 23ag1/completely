@@ -24,3 +24,16 @@ No `PLAN.md`, no `STATE.md`, no `PROGRESS.md`, no `IMPLEMENTATION_PLAN.md`. Stat
 
 After migrating, plan with `/completely:plan` (Beads-first). Don't keep authoring markdown plans
 and re-importing them — that's the dual-representation trap this design removes.
+
+## Loop engine — decision (Ralph rejected; Dynamic Workflows is the route-to target)
+
+`run.sh` is **Ralph's loop *shape*** (one task / fresh `claude -p` / iteration) as an OVERLAY — not a
+dependency. Replacing it with the raw Ralph plugin is **rejected**: Ralph drives off
+`IMPLEMENTATION_PLAN.md`/`PROGRESS.md` (markdown status — the dual-representation trap above),
+"done" is the agent self-declaring COMPLETE (vibe), it does `git add -A` + push each iteration, and
+it has no independent evaluator or commit-before-close gate. Taking it would undo the Beads spine
+and the deterministic gates.
+
+The legitimate "don't hand-roll the loop" question targets **Claude Code Dynamic Workflows**
+(state in script vars not context, ≤16 parallel, interruption-survival) — which can keep Beads as
+the spine. That evaluation/spike is task `p4f`. Until then `run.sh` stays.
