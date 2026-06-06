@@ -170,6 +170,13 @@ GI=$( cd "$D" && GIT_CONFIG_GLOBAL=/dev/null git config user.email 2>/dev/null )
 [ -n "$GI" ] && ok "run.sh ensures a git identity before the loop ($GI)" || no "run.sh land-guard (no identity set)"
 rm -rf "$D"
 
+echo "== run dispatcher (parallel disjoint / serial same-zone) =="
+if bash "$ROOT/scripts/run.sh" --self-test >/dev/null 2>&1; then
+  ok "cmpl run dispatcher: disjoint tasks parallel, same write_zone serializes"
+else
+  no "cmpl run dispatcher self-test"
+fi
+
 echo "== doctor =="
 bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1 && ok "doctor runs" || no "doctor runs"
 

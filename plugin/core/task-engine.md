@@ -32,6 +32,8 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
 3. **DECOMPOSE if parallelizable.** Independent sub-streams with DISJOINT write-zones? Build a
    decomposition table and spawn **subagents in parallel** (gsd-executor pattern / Task tool), each
    with its own write-zone; serialize any conflicting writes with `bd merge-slot`. Else sequential.
+   This is the WITHIN-task fan-out. The cross-task fan-out (multiple `bd ready` tasks running at
+   once) is owned by `cmpl run` — see "queue-level parallelism" below.
 
 4. **BUILD (TDD + craft, routed by stack).** `tdd`: failing test → minimal code → refactor; never
    delete/disable a test. Then ELEVATE with the specialist `cmpl craft` named for this stack —
@@ -72,6 +74,32 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
 - **Phase-modes (GSD) when the task is a whole phase, not a unit:** `/gsd-spec-phase` (the *what*),
   `/gsd-ui-phase` (UI contract), `/gsd-secure-phase` (threats), `/gsd-eval-review` (AI eval). The
   per-task recipe above still runs underneath each.
+
+## Queue-level parallelism (`cmpl run` dispatcher)
+
+Inside a task the worker can parallelize via subagents (step 3). Across the `bd ready` queue,
+`cmpl run` (unattended mode) is also parallel by default: each iteration the parent reads the
+queue, picks the highest-priority tasks whose `metadata.write_zone`s are **disjoint** from every
+running worker (and from each other), pre-claims them via `bd update --claim`, and spawns up to
+`CMP_PARALLEL` (default 4) fresh `claude -p` workers in parallel. Same-write-zone tasks
+**serialize** — the next one waits for the current to finish before being dispatched.
+
+The worker receives its assigned task ID via an injected stdin header (skip the selection step 0,
+work the specific task). A task with NO declared `write_zone` is treated as a global zone and
+serializes against everything (the worker-contract requires a declared zone — `cmpl lint` enforces
+this on plan-apply).
+
+Knobs:
+- `CMP_PARALLEL=N` (or `--parallel N`) — max concurrent workers (1 = legacy serial flow).
+- `CMP_BENCH_LOG=...` — forces `--parallel 1` so JSON results in the shared log stay race-free.
+- `--dry-run` prints the dispatch plan (which tasks would spawn in parallel, which would wait).
+- `--self-test` runs the dispatcher's unit cases (disjoint dispatch / same-zone serialize /
+  prefix-overlap / undeclared-zone-is-global / running-zone-blocks-overlap / slot-budget /
+  checkpoint-skip) without touching `claude` or Beads.
+
+Merge-slot is still the safety net at COMMIT time for rare cross-zone file collisions (two tasks
+whose declared zones don't overlap but happen to both touch a file at land time); the dispatcher
+covers the common case at SPAWN time.
 
 ## control vs auto — same engine
 
