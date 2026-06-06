@@ -23,6 +23,20 @@ g(){ printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys;print
 [ "$(g 'DROP TABLE users;')" = 2 ] && ok "blocks DROP TABLE"  || no "blocks DROP TABLE"
 [ "$(g 'ls -la')" = 0 ]            && ok "allows ls"          || no "allows ls"
 
+echo "== bd-close gate (commit-before-close) =="
+GD=$(mktmp)
+( cd "$GD" && git -c user.email=t@t -c user.name=t commit -qm init --allow-empty 2>/dev/null )
+gc(){ printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" \
+        | ( cd "$GD" && bash "$ROOT/hooks/guard-close.sh" >/dev/null 2>&1 ); echo $?; }
+gco(){ printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$1")" \
+        | ( cd "$GD" && CMP_ALLOW_DIRTY_CLOSE=1 bash "$ROOT/hooks/guard-close.sh" >/dev/null 2>&1 ); echo $?; }
+[ "$(gc 'bd close abc-1')" = 0 ] && ok "close allowed on clean tree"          || no "close clean allow"
+[ "$(gc 'bd ready')" = 0 ]       && ok "gate ignores non-close bd commands"   || no "close gate over-broad"
+( cd "$GD" && echo x > f.txt && git add f.txt )
+[ "$(gc 'bd close abc-1')" = 2 ] && ok "close BLOCKED on uncommitted tracked changes" || no "close dirty block"
+[ "$(gco 'bd close abc-1')" = 0 ] && ok "CMP_ALLOW_DIRTY_CLOSE overrides the gate" || no "close override"
+rm -rf "$GD"
+
 echo "== sync idempotency =="
 D=$(mktmp); printf -- '- [ ] alpha\n- [x] beta\n' > "$D/IMPLEMENTATION_PLAN.md"
 bash "$ROOT/scripts/sync.sh" "$D" >/dev/null 2>&1; n1=$(count "$D")
@@ -178,6 +192,12 @@ bash "$ROOT/scripts/check.sh" "$D" >/tmp/cmpcc.out 2>&1; rc=$?
 printf '[check]\ncommands = [ { name = "ok", cmd = "true" } ]\n' > "$D/completely.toml"
 bash "$ROOT/scripts/check.sh" "$D" >/dev/null 2>&1 && ok "check clean -> exit 0" || no "check clean exit"
 rm -rf "$D" /tmp/cmpcc.out
+
+echo "== root completely.toml gates this repo (no-op regression) =="
+RNAMES=$(python3 "$ROOT/scripts/config.py" checks "$ROOT/.." 2>/dev/null | python3 -c 'import sys
+names=sorted(l.split("\t")[0] for l in sys.stdin.read().splitlines() if l.strip())
+print(",".join(names))')
+[ "$RNAMES" = "contracts,ruff" ] && ok "root completely.toml resolves ruff + contracts (cmpl check not a no-op)" || no "root [check] regression ($RNAMES)"
 
 echo "== plan-apply (Beads-first, no markdown) =="
 D=$(mktmp)

@@ -1,5 +1,5 @@
 {
-  "description": "claude-harness deterministic gates: quality-gate after edits, dangerous-command guard before Bash.",
+  "description": "claude-harness deterministic gates: quality-gate after edits, dangerous-command + commit-before-close guards before Bash.",
   "hooks": {
     "Setup": [
       {
@@ -32,6 +32,11 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-dangerous.sh\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-close.sh\"",
             "timeout": 10
           }
         ]
