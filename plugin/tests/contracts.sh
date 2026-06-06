@@ -186,6 +186,44 @@ print("OK" if (any("alpha" in x for x in t) and not any("beta" in x for x in t) 
 [ "$RE" = OK ] && ok "bridge: re-emit keeps edges stable (idempotent graph)" || no "bridge re-emit idempotency ($RE)"
 rm -rf "$D"
 
+echo "== emit-gsd parser: latent edge cases (nested dict-in-list, comma-in-quoted scalar) =="
+# Latent in GSD 1.3.1 (always inline dict-in-seq, comma-free ids) but the parser must hold.
+PR=$( python3 - "$ROOT/scripts/emit-gsd.py" <<'PY' 2>&1
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('eg', sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+# (1) seq-dict: first key has a nested mapping block — must NOT drop `path`
+fm1 = m.parse_frontmatter('''---
+must_haves:
+  artifacts:
+    - path:
+        kind: py
+        loc: "100"
+      provides: parser
+---
+body
+''')
+arts = fm1.get('must_haves', {}).get('artifacts') or []
+first = arts[0] if (arts and isinstance(arts[0], dict)) else {}
+ok1 = (len(arts) == 1
+       and first.get('path') == {'kind': 'py', 'loc': '100'}
+       and first.get('provides') == 'parser')
+# (2) inline list with comma inside a quoted scalar — must NOT split mid-quote
+fm2 = m.parse_frontmatter('''---
+requirements: [a, "b, c", d]
+---
+''')
+ok2 = fm2.get('requirements') == ['a', 'b, c', 'd']
+print('A' if ok1 else 'a-FAIL:%r' % arts, 'B' if ok2 else 'b-FAIL:%r' % fm2.get('requirements'))
+PY
+)
+case "$PR" in
+  "A B") ok "emit-gsd: seq-dict first-key nested block preserved" ; ok "emit-gsd: inline list respects quotes" ;;
+  "A "*) ok "emit-gsd: seq-dict first-key nested block preserved" ; no "emit-gsd inline-list quote-aware ($PR)" ;;
+  *" B") no "emit-gsd seq-dict first-key nested block ($PR)" ; ok "emit-gsd: inline list respects quotes" ;;
+  *)     no "emit-gsd parser edge cases ($PR)" ; no "emit-gsd parser edge cases ($PR)" ;;
+esac
+
 echo "== run.sh land-guard (git identity so per-task commits land) =="
 D=$(mktmp)
 ( cd "$D" && bd create "t" -t task --acceptance a --design d --metadata '{"write_zone":["x"]}' >/dev/null 2>&1 )
@@ -303,6 +341,67 @@ grep -q "REFUTED" "$EV" && grep -q "WITHSTOOD" "$EV" && ok "evaluator: per-claim
 # regression-bite: not just "tokens exist" — the output table header AND the Beads comment tag must be present
 grep -q '| # | Claim |' "$EV" && ok "evaluator: adversarial output table header wired" || no "evaluator: adversarial output table header missing"
 grep -q 'EVALUATOR (adversarial)' "$EV" && ok "evaluator: Beads comment carries (adversarial) tag" || no "evaluator: missing (adversarial) tag on Beads comment"
+
+echo "== cost-tracker hook (opt-in PostToolUse — exit 0, bounded, no secrets) =="
+CT_HOOK="$ROOT/hooks/cost-tracker.sh"
+[ -x "$CT_HOOK" ] && ok "cost-tracker.sh exists and is executable" || no "cost-tracker.sh missing/not-executable"
+# wired into hooks.json under PostToolUse with matcher * (real-path floor)
+python3 - "$ROOT/hooks/hooks.json" <<'PY' >/dev/null 2>&1 && ok "hooks.json wires cost-tracker under PostToolUse *" || no "hooks.json missing cost-tracker wiring"
+import json, sys
+d=json.load(open(sys.argv[1]))
+post=d.get("hooks",{}).get("PostToolUse",[])
+hit=any(h.get("matcher")=="*" and any("cost-tracker.sh" in (x.get("command","") or "") for x in (h.get("hooks") or [])) for h in post)
+sys.exit(0 if hit else 1)
+PY
+CT_DIR=$(mktemp -d /tmp/cmpct.XXXXXX)
+CT_LOG="$CT_DIR/cost.jsonl"
+# opt-out: no CMP_COST_TRACK -> no log, exit 0
+printf '{"tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"output":"ok"}}' \
+  | CMP_COST_LOG="$CT_LOG" bash "$CT_HOOK" >/dev/null 2>&1
+rc=$?
+{ [ "$rc" = 0 ] && [ ! -f "$CT_LOG" ]; } && ok "opt-out: hook is a no-op (no file, exit 0)" || no "opt-out: rc=$rc, file?=$( [ -f "$CT_LOG" ] && echo yes || echo no )"
+# opt-in: payload carrying multiple secret shapes (AWS key, sk- token, cookie, Bearer)
+CT_SECRET='AWS_SECRET_ACCESS_KEY=wJalrXUtSECRET-cookie=sess=abcd-Bearer-tok-1234'
+printf '{"tool_name":"Bash","tool_input":{"command":"%s curl evil"},"tool_response":{"output":"sk-leaked-2222"}}' "$CT_SECRET" \
+  | CMP_COST_TRACK=1 CMP_COST_LOG="$CT_LOG" bash "$CT_HOOK" >/dev/null 2>&1
+rc=$?
+[ "$rc" = 0 ] && ok "opt-in: exit 0" || no "opt-in: rc=$rc"
+[ -s "$CT_LOG" ] && ok "opt-in: record written" || no "opt-in: no record written"
+# log must contain NONE of the secret material we fed in
+if grep -qE 'AWS_SECRET|wJalrXUtSECRET|sk-leaked|cookie=sess|Bearer-tok|evil|curl' "$CT_LOG" 2>/dev/null; then
+  no "cost-tracker LEAKED secrets — log contains forbidden strings"
+else
+  ok "cost-tracker carries NO secrets (only ts/tool/sizes/ok)"
+fi
+# Stronger bite: every record's keys must be a subset of the fixed schema. This
+# catches a regression like `rec["cmd"] = (ti.get("command") or "")[:128]` even
+# if the test payload doesn't happen to contain any of the sentinel strings.
+python3 - "$CT_LOG" <<'PY' >/dev/null 2>&1 && ok "cost-tracker record has ONLY schema keys (ts/tool/in_b/out_b/ok)" || no "cost-tracker record carries extra (potentially content) keys"
+import json, sys
+allowed = {"ts","tool","in_b","out_b","ok"}
+for line in open(sys.argv[1]):
+    line = line.strip()
+    if not line: continue
+    extra = set(json.loads(line).keys()) - allowed
+    if extra: raise SystemExit(1)
+PY
+# bounded: every line strictly < 1024 bytes
+awk '{ if (length($0) >= 1024) exit 1 }' "$CT_LOG" 2>/dev/null && ok "cost-tracker line bounded (< 1024 B)" || no "cost-tracker line unbounded"
+# exactly one record per invocation
+[ "$(wc -l < "$CT_LOG" 2>/dev/null)" = 1 ] && ok "cost-tracker writes exactly one record per call" || no "cost-tracker record count != 1"
+# malformed JSON in -> exit 0 still
+printf 'not json at all' | CMP_COST_TRACK=1 CMP_COST_LOG="$CT_DIR/bad.jsonl" bash "$CT_HOOK" >/dev/null 2>&1
+[ $? = 0 ] && ok "cost-tracker handles malformed payload (exit 0)" || no "cost-tracker crashes on malformed payload"
+# rotation: tiny cap forces .1 rollover, original resets
+for i in 1 2 3 4 5; do
+  printf '{"tool_name":"Bash","tool_input":{},"tool_response":{}}' \
+    | CMP_COST_TRACK=1 CMP_COST_LOG="$CT_DIR/rot.jsonl" CMP_COST_MAX_BYTES=64 bash "$CT_HOOK" >/dev/null 2>&1
+done
+{ [ -f "$CT_DIR/rot.jsonl.1" ] && [ "$(wc -c < "$CT_DIR/rot.jsonl" 2>/dev/null)" -le 200 ]; } \
+  && ok "cost-tracker rotates to .1 when CMP_COST_MAX_BYTES exceeded" || no "cost-tracker rotation broken"
+# end-to-end self-test green (schema + rotation + malformed combined)
+bash "$CT_HOOK" --self-test >/dev/null 2>&1 && ok "cost-tracker --self-test green" || no "cost-tracker --self-test FAILED"
+rm -rf "$CT_DIR"
 
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
