@@ -63,6 +63,15 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
    AND the task's `metadata.must_haves` (GSD goal-backward: truths/artifacts/key_links) — is FAIL
    until proven by evidence you actually ran. The verifier feeds evidence; the evaluator owns the
    verdict. A single FAIL → not done.
+   **Path-Exercised (enforced).** Evidence must run the REAL runtime path, not a proxy —
+   *tests-green ≠ failing-path-exercised*: a green unit, a `--dry-run`, or a mock at the wrong layer
+   can pass while the production path never runs (this is how the parallel-dispatch crash once
+   shipped green). `cmpl run` injects `<<COMPLETELY_ENFORCED step=verify policy=path-exercised>>`
+   into every worker prompt at spawn (trace: `cmpl run --show-prompt <id>`; gated by
+   `cmpl run --self-test`). **Convention for orchestration/shell:** drive the real loop with a mock
+   backend (`CMP_CLAUDE_CMD=true`) so the spawn/reap path actually runs — a unit + dry-run skip it —
+   and add a negative control that goes RED when the impl is broken. See `plugin/agents/evaluator.md`
+   (Path-Exercised) and `plugin/tests/fixtures/path-exercised/`.
 
 8. **DEBUG on failure.** Tests/checks fail repeatedly (≥3)? Spawn **gsd-debugger** (scientific
    method, persistent session) — don't thrash, don't disable the test.

@@ -150,7 +150,7 @@ zone_for() {
 }
 
 # ---------- enforced-policy injection (step-bound system-style blocks) -----------------------------
-# v0.11's weakness: thinking-models + security policy were named in task-engine.md but never delivered
+# v0.11's weakness: thinking-models + security + path-exercised policy were named in task-engine.md but never delivered
 # to the worker — the worker had to read the doc, then choose to apply them. We now inject the policy
 # INLINE into the stdin prompt at spawn time, tagged to a specific step. The block text IS the rule
 # (not a pointer to a file), so the worker can't no-op past it via "I didn't read that md".
@@ -181,6 +181,20 @@ as BLOCKING: fix in this task, or `bd update --status blocked` with the finding 
 Do NOT paraphrase its verdict — quote the relevant findings on the bead in STEP 9 (LAND).
 <<END_ENFORCED>>'
 
+ENFORCED_VERIFY='<<COMPLETELY_ENFORCED step=verify policy=path-exercised>>
+At STEP 7 (VERIFY) your evidence MUST exercise the real runtime path, not a proxy.
+Tests-green != failing-path-exercised: a passing unit, a --dry-run, or a mock at the wrong layer
+can stay green while the production code path never runs. For each behavioral acceptance criterion:
+  · name the real runtime path (the entrypoint it runs through in production) + its failure surface;
+  · cite evidence that invokes THAT entrypoint end-to-end — a unit / dry-run / wrong-layer-mock
+    ALONE means the criterion is unproven (stop-condition);
+  · supply a negative control — break the impl along its failure surface (a throwaway copy, NEVER
+    the repo) and show the cited test goes RED; a test that stays green when the impl is broken is
+    vacuous.
+For orchestration/shell, drive the real loop with a mock backend (CMP_CLAUDE_CMD=true). Post the
+real-path command + its output on the bead in STEP 9 (LAND). A proxy-only claim is a stop-condition.
+<<END_ENFORCED>>'
+
 # Build the exact stdin a worker will receive for a given task. Pure function — no Beads writes,
 # no spawn — so it's safe to call from --show-prompt and --self-test for trace evidence.
 build_worker_prompt() {
@@ -196,6 +210,7 @@ build_worker_prompt() {
   printf '<<END_DISPATCH>>\n\n'
   printf '%s\n\n' "$ENFORCED_PLAN_CHECK"
   printf '%s\n\n' "$ENFORCED_SECURITY"
+  printf '%s\n\n' "$ENFORCED_VERIFY"
   cat "$PROMPT"
 }
 
@@ -288,6 +303,10 @@ if [ "$SELF_TEST" = 1 ]; then
     'security-reviewer' \
     'CRITICAL' \
     'BLOCKING' \
+    '<<COMPLETELY_ENFORCED step=verify' \
+    'policy=path-exercised' \
+    'real runtime path' \
+    'negative control' \
     '<<END_ENFORCED>>' \
     '<<COMPLETELY_DISPATCH>>' \
     'Your assigned task: T1'; do
@@ -307,11 +326,12 @@ if [ "$SELF_TEST" = 1 ]; then
     p_dispatch="$(printf '%s' "$inj" | grep -n '<<COMPLETELY_DISPATCH>>' | head -1 | cut -d: -f1)"
     p_plan="$(printf '%s' "$inj" | grep -n '<<COMPLETELY_ENFORCED step=plan-check' | head -1 | cut -d: -f1)"
     p_sec="$(printf '%s' "$inj" | grep -n '<<COMPLETELY_ENFORCED step=review' | head -1 | cut -d: -f1)"
-    if [ -n "$p_dispatch" ] && [ -n "$p_plan" ] && [ -n "$p_sec" ] \
-       && [ "$p_dispatch" -lt "$p_plan" ] && [ "$p_plan" -lt "$p_sec" ]; then
-      echo "  PASS enforced-policy ordering: dispatch < plan-check < review"
+    p_verify="$(printf '%s' "$inj" | grep -n '<<COMPLETELY_ENFORCED step=verify' | head -1 | cut -d: -f1)"
+    if [ -n "$p_dispatch" ] && [ -n "$p_plan" ] && [ -n "$p_sec" ] && [ -n "$p_verify" ] \
+       && [ "$p_dispatch" -lt "$p_plan" ] && [ "$p_plan" -lt "$p_sec" ] && [ "$p_sec" -lt "$p_verify" ]; then
+      echo "  PASS enforced-policy ordering: dispatch < plan-check < review < verify"
     else
-      echo "  FAIL enforced-policy ordering (dispatch=$p_dispatch plan=$p_plan review=$p_sec)"
+      echo "  FAIL enforced-policy ordering (dispatch=$p_dispatch plan=$p_plan review=$p_sec verify=$p_verify)"
       fail=1
     fi
   fi
