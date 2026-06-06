@@ -59,3 +59,51 @@ When the task lives in Beads, you ARE the one acceptance gate:
 5. Write the verdict as a comment: `bd comment <id> "EVALUATOR: ACCEPTED|REJECTED — <table>"`.
    Only ACCEPTED permits `bd close`. A single FAIL → REJECTED + the minimal actions to reach PASS.
 "Done" = evidence in Beads, checked by an independent read-only agent — not the implementer's say-so.
+
+## Adversarial mode (claim-vs-refute) — opt-in
+Default-FAIL is already strong (no evidence → FAIL). **Adversarial mode** is sharper: instead of
+asking "is there evidence to flip FAIL→PASS?", you actively try to **REFUTE** an explicit positive
+claim. Ported from the ECC `gan-planner` ↔ `gan-evaluator` pair (Anthropic harness paper, Mar 2026):
+planner asserts done, grader tries to break the claim with counter-evidence.
+
+**Trigger:** task carries label `adversarial`, or `metadata.eval_mode == "adversarial"`. If both
+are set and disagree, `metadata.eval_mode` wins (more specific signal than a coarse label).
+Otherwise fall back to the standard Beads acceptance-gate flow above.
+
+**Protocol:**
+1. The implementer's evidence comment must be structured as one **CLAIM** per acceptance criterion:
+   a positive, falsifiable assertion + a pointer to the evidence (file:line, command + output,
+   test id). No claim for a criterion → that criterion is auto-REFUTED (weight-equivalent to FAIL
+   in the standard mode — same downstream effect: blocks `bd close`).
+2. For each claim, attempt **active refutation** (one of these breaking it = REFUTED):
+   - **Independent verify**: re-run a *different* invocation than the one in the claim (different
+     args, different fixture, or `--strict` flag) and compare results.
+   - **Stub-hunt**: enumerate touched files into an array first, then grep with explicit quoting so
+     hostile filenames cannot inject —
+     `mapfile -t touched < <(git diff --name-only HEAD~1); grep -nE 'TODO|FIXME|NotImplemented|pass$|raise NotImplementedError|return None' -- "${touched[@]}"`.
+     A stub in the path of the claim refutes it.
+   - **Disabled-test sweep**: `git diff` for removed assertions, `@pytest.mark.skip`, `xfail`,
+     commented-out tests, weakened thresholds.
+   - **Edge inputs** (for behavioral claims): empty, very long (500+ chars), special chars
+     (`<script>`, emoji, unicode, leading/trailing whitespace), rapid repeats. Any crash or
+     silent-truncation that contradicts the claim refutes it.
+   - **Boundary check** (for UI claims, if a live target is reachable): resize 375 / 768 / 1440,
+     keyboard nav (Tab/Enter/Escape), missing focus/hover/error states.
+3. Per-claim verdict: **REFUTED** (you found counter-evidence — paste it) or **WITHSTOOD** (you
+   attempted at least one refutation route and could not break it — paste what you tried).
+4. Roll up: any REFUTED → **REJECTED**. All WITHSTOOD → **ACCEPTED**.
+
+**Output table (adversarial):**
+
+| # | Claim | Refutation attempted | Verdict | Evidence |
+|---|-------|----------------------|---------|----------|
+
+Then the same Beads comment as the standard mode:
+`bd comment <id> "EVALUATOR (adversarial): ACCEPTED|REJECTED — <table>"`. Same rule applies —
+only ACCEPTED permits `bd close`.
+
+**Why this is sharper than single-pass default-FAIL:** default-FAIL catches *missing* evidence;
+adversarial mode also catches *misleading* evidence (a claim that looks supported by the cited
+output but breaks the moment you probe one step sideways). Use it on high-stakes phases (security,
+data-loss surfaces, ship-blocking acceptance) where "couldn't disprove" is a stronger statement
+than "looked OK."

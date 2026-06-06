@@ -250,6 +250,17 @@ if bash "$ROOT/tests/bench-mock.sh" >/dev/null 2>&1; then ok "cmpl bench: worktr
 echo "== craft router (stack -> existing tools) =="
 if bash "$ROOT/tests/craft-mock.sh" >/dev/null 2>&1; then ok "cmpl craft: stack-aware routing to existing specialists"; else no "cmpl craft router failed"; fi
 
+echo "== evaluator: adversarial claim-vs-refute mode (port ECC gan-* pair) =="
+EV="$ROOT/agents/evaluator.md"
+grep -q "Adversarial mode" "$EV" && ok "evaluator: adversarial mode section present" || no "evaluator: missing adversarial mode section"
+grep -qi "claim" "$EV" && grep -qi "refute" "$EV" && ok "evaluator: claim + refute language present" || no "evaluator: claim/refute language missing"
+grep -q "eval_mode" "$EV" && ok "evaluator: opt-in trigger documented (eval_mode)" || no "evaluator: opt-in trigger missing"
+# REFUTED stays default until the evaluator finds the claim withstands an active refutation attempt
+grep -q "REFUTED" "$EV" && grep -q "WITHSTOOD" "$EV" && ok "evaluator: per-claim verdicts named (REFUTED/WITHSTOOD)" || no "evaluator: per-claim verdict tokens missing"
+# regression-bite: not just "tokens exist" — the output table header AND the Beads comment tag must be present
+grep -q '| # | Claim |' "$EV" && ok "evaluator: adversarial output table header wired" || no "evaluator: adversarial output table header missing"
+grep -q 'EVALUATOR (adversarial)' "$EV" && ok "evaluator: Beads comment carries (adversarial) tag" || no "evaluator: missing (adversarial) tag on Beads comment"
+
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
 skip "two independent streams actually spawn in parallel"
