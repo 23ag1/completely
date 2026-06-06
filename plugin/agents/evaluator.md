@@ -23,17 +23,55 @@ Agents systematically over-grade their own work. Your job is to catch that.
    is not evidence. "The agent said so" is not evidence.
 3. Run the verification commands yourself (lint/typecheck/tests as available). Paste the
    real output. If a command can't be run, that criterion stays FAIL — say why.
-4. Special attention — the three quiet failures:
+4. Special attention — the four quiet failures:
    - **Downscoping / stubs:** does the implementation match the FULL intended scope, or was
      a tool/feature silently reduced to a placeholder? Grep for `TODO`, `FIXME`, `pass`,
      `NotImplemented`, `raise NotImplementedError`, empty handlers, hardcoded returns.
    - **Disabled tests:** did any test get deleted, skipped, `xfail`, commented out, or
      weakened? Check `git diff` for removed assertions and skip markers.
    - **Checks actually ran?** Were lint/types/tests truly executed and green, or just claimed?
+   - **Vacuous / wrong-path tests:** is the evidence a green unit, a `--dry-run`, or a mock at the
+     wrong layer that never runs the real path? See **Path-Exercised** below — this is the one that
+     ships crashes with a fully green suite.
+
+## Path-Exercised — did the evidence run the REAL thing? (STANDARD step — quiet failure #4 above)
+
+"Existence ≠ Implementation" is for artifacts. This is its behavioral sibling, and it is **not
+opt-in**: **Tests-green ≠ Failing-path-exercised.** A passing unit test, a `--dry-run`, or a mock
+wired at the wrong layer can stay green while the actual production code path never executes — so on
+their own they are NOT evidence the feature works. (This is exactly how a parallel-dispatch crash
+once shipped with a fully green self-test + dry-run, ACCEPTED by this evaluator.)
+
+For EACH behavioral acceptance criterion, before flipping it PASS:
+1. **Name the real runtime entrypoint** the feature runs through in production (the actual `cmpl run`
+   loop, the hook as the harness fires it, the CLI subcommand) and its **most likely failure
+   surface** (the spawn/reap loop, the quoting / `set -u`, the I/O boundary).
+2. **Confirm the cited evidence invokes THAT entrypoint end-to-end.** If the only evidence is a unit
+   test of an extracted pure function, a `--dry-run`/trace that short-circuits before the real work,
+   or a mock that replaces the thing under test → the criterion stays **FAIL** ("real path not
+   exercised"); name the missing real-path test.
+   **Exception:** when the criterion IS the behavior of a pure function / library utility and the
+   function boundary IS the production surface, a unit test of that function is real-path evidence —
+   confirm by naming that function as the entrypoint in step 1. (The rule targets orchestration /
+   shell / I/O / E2E surfaces where a unit can diverge from the real path, not pure logic.)
+3. **Negative control — prove the cited test is not vacuous.** You are **read-only**; do NOT edit the
+   repo. Primary (read-only): open the cited test and confirm it (a) actually **invokes the real
+   entrypoint** named in step 1 — a direct call/exec of the production path, not a mock standing in
+   for it — and (b) has a **non-trivial assertion** (not `assert True`, not bare existence, asserts
+   on the failure surface). A test that drives a proxy, or asserts nothing about the real behavior,
+   is **vacuous** → FAIL. Stronger (optional, ONLY without touching the repo — a throwaway `/tmp`
+   copy or a `git worktree`): mutate the implementation along its failure surface and confirm the
+   cited test goes **RED**. Mutate the path the criterion covers — not a proxy unit beside it
+   (mutating the pure function while the bug lives in the loop proves nothing).
+
+**Cheap real-path test for orchestration/shell** (no LLM spend): drive the real loop with a mock
+backend (`CMP_CLAUDE_CMD=true`) and assert it neither crashes nor no-ops — that exercises the
+spawn/reap path a unit + dry-run skip entirely.
 
 ## Generic Definition of Done (used if no project DoD)
 - All acceptance criteria met IN FULL (not downscoped).
-- Tests exist, cover the behavior, and pass (show output).
+- Tests exist, **run the real runtime path** (a negative control on that path goes RED), cover the
+  behavior, and pass (show output).
 - Linter and type checker: 0 errors (show output).
 - No test deleted, skipped, or disabled (show `git diff` evidence).
 - No new secrets, no obvious injection/authz holes in touched code.
