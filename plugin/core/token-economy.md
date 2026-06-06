@@ -14,9 +14,24 @@ Load the least context that still produces the right outcome.
 - **Scripts over MCP when a shell will do.** If the agent has a terminal, a small command is cheaper
   than an always-loaded MCP tool. Reserve MCP for what a script can't do (a live browser, a remote API).
 - **Fresh context per task** beats one long session: re-read only what the task needs.
-- **Compaction tools (optional, routed via `cmpl craft`):** **rtk** wraps dev commands (git/pytest/
-  ruff/grep) and compresses their output before the agent reads it — cuts *input* tokens, the bigger
-  lever. **caveman** keeps the agent's *output* terse. Both local, no key; absent → no-op.
-  ⚠️ rtk rewrites command output — keep it away from gate parsers (`cmpl check`/`lint`) or verify
-  they still parse. Quantify any saving with `cmpl bench` (rtk on/off), never assume.
+- **Two compaction levers (input vs output) — be honest about which moves the needle.**
+  Most cost lives on the **input** side: tool output the agent reads (test logs, greps, file dumps)
+  dwarfs anything it writes. Both levers are OPTIONAL — neither is a hard dep; both degrade to no-op
+  when absent. Routed via `cmpl craft`; listed alongside other optional upstreams in `cmpl setup`.
+  - **rtk** (the bigger lever — input). Wraps dev commands (git/pytest/ruff/grep) and compresses
+    their output *before* the agent reads it. Local, no key.
+    ⚠️ Rewrites command output — keep it away from gate parsers (`cmpl check`/`lint`) or verify they
+    still parse. Quantify any saving with `cmpl bench` (rtk on/off), never assume.
+  - **caveman** (the smaller lever — output). Keeps the agent's own output terse. Local, no key.
+    The *principle* (no preamble, no trailing summary, evidence > prose) is **baked into the worker
+    overlay** (overlays/ralph/PROMPT_build.completely.md) and applies whether or not `/caveman` is
+    installed — the skill is an OPTIONAL amplifier, not a dependency.
+  Output tokens are smaller in absolute terms but the agent controls them directly every turn, so the
+  discipline pays off cumulatively. Don't skip it just because rtk is the bigger lever — they stack.
+- **Benching the levers.** `cmpl bench` is the only honest answer to "did it help?". Run it with the
+  arms held fixed (raw vs completely) and the relevant lever as the dimension you flip:
+  `--arms raw,completely` × `rtk on/off` × `caveman on/off`. Today the rtk and caveman dimensions
+  are toggled by wrapping `cmpl auto` invocation (rtk: alias the dev commands; caveman: prepend
+  `/caveman ` to the seed prompt so the skill triggers when installed and is inert otherwise).
+  Report **$ per passed run**, not $ per run — a cheaper arm that fails more isn't cheaper.
 - Config knob: `completely.toml [tools] lazy = true` documents deferring heavy surfaces.

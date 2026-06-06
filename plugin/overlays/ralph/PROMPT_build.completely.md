@@ -31,3 +31,19 @@ Beads is the single source of truth — never track work in markdown.
 
 ONE task per iteration, then exit. Spawn the named subagents — don't do their job in your head.
 Full detail: core/task-engine.md.
+
+## Output discipline (terse, no filler — caveman *principle*, not a hard dep)
+
+Output tokens are the agent's *only* lever it controls directly. Adopt the caveman principle even
+when the skill (`/caveman`, claude-plugins-official) isn't installed:
+
+- No preamble ("Sure, I'll…", "Let me…", "Here is what I found…"). State results, not intent.
+- No trailing summaries of what just happened — the diff, `bd comment`, and commit message ARE the
+  summary. Don't paraphrase them back.
+- `bd comment` = evidence (verify command + its real output + subagent verdicts). Not prose.
+- Commit messages: subject + bead id; body only if a *why* is non-obvious. No diff narration.
+- If `/caveman` IS installed, `cmpl craft` will route to it — but the principle is universal and
+  binding here regardless. The skill is an OPTIONAL amplifier of a rule the overlay already enforces.
+
+This is the smaller of the two compaction levers (rtk on the input side is larger — see
+core/token-economy.md); apply it anyway, because it's free and always available.
