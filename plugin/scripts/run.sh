@@ -336,6 +336,80 @@ if [ "$SELF_TEST" = 1 ]; then
     fi
   fi
 
+  # Case 9: lingering-blocked worker (THE p4f failure mode — auto stuck on a worker that committed +
+  # marked its task blocked but whose pid did not exit). Drives the REAL run.sh main loop in a
+  # subprocess against a temp bd repo, with CMP_CLAUDE_CMD pointing at an inline mock that claims +
+  # blocks the task, then sleeps for far longer than our budget. Asserts:
+  #   · the loop reaps the lingering pid via the grace-then-kill path,
+  #   · the loop reports clean termination ("done after N iteration(s)"),
+  #   · the bd task ended up in `blocked` (worker's protocol did land before linger).
+  # Negative-control friendly: if the linger-detection branch (alive PID + terminal bd state) is
+  # removed, the subprocess hits the outer `timeout` and this case turns red. Likewise if `wait -n`
+  # is reintroduced anywhere in the saturated-wait path with PARALLEL=1 + 1 task.
+  if command -v bd >/dev/null 2>&1; then
+    LD=$(mktemp -d /tmp/cmpl-linger-XXXXXX)
+    LMOCK=$(mktemp /tmp/cmpl-linger-mock-XXXXXX.sh)
+    # Resolve our own absolute path — the subprocess cd's into a tmp bd repo before re-invoking us.
+    SELF_ABS="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+    # Inline mock: read+discard stdin overlay, claim the first ready task, mark it blocked, then
+    # sleep WAY past the test's timeout. Exits the parent's grace-kill, not by sleep finishing.
+    cat > "$LMOCK" <<'MOCK'
+#!/usr/bin/env bash
+# Linger mock: reads the dispatch header from stdin to learn its assigned task ID (parent already
+# claimed it), marks it blocked, then sleeps forever to simulate the p4f failure mode.
+set -uo pipefail
+in="$(cat)"
+id="$(printf '%s' "$in" | sed -n 's/^Your assigned task: //p' | head -1)"
+[ -n "$id" ] || exit 0
+bd update "$id" --status blocked >/dev/null 2>&1
+bd comment "$id" "linger-mock: blocked, now sleeping (simulating p4f)" >/dev/null 2>&1
+exec sleep 9999
+MOCK
+    chmod +x "$LMOCK"
+    if ( cd "$LD" && git init -q >/dev/null 2>&1 \
+         && git -c user.email=t@t -c user.name=t commit -qm init --allow-empty >/dev/null 2>&1 \
+         && bd init proj --stealth >/dev/null 2>&1 \
+         && bd create "linger" -t task --acceptance a --design d \
+              --metadata '{"write_zone":["a.txt"],"verify":"true"}' >/dev/null 2>&1 ); then
+      # Tight wall-clock budgets force the new path quickly: 1s grace, 6s outer cap.
+      # Pin the overlay prompt path so the subprocess does not depend on its own $ROOT (lets us run
+      # this self-test from a moved copy of run.sh for negative-control purposes).
+      LD_OUT=$( cd "$LD" && CMP_CLAUDE_CMD="bash $LMOCK" CMP_PARALLEL=1 \
+        CMP_RUN_PROMPT="$PROMPT" \
+        CMP_WORKER_GRACE=1 CMP_POLL_SECS=1 CMP_STALL_SECS=30 CMP_WORKER_TIMEOUT=60 \
+        timeout 12 bash "$SELF_ABS" --mode unattended 2>&1 ); LD_RC=$?
+      LD_STATUS=$( cd "$LD" && bd list --status blocked --json 2>/dev/null | python3 -c '
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: d = []
+d = d if isinstance(d, list) else d.get("issues", [])
+print("BLOCKED" if any(i.get("title") == "linger" for i in d) else "OPEN")' )
+      if [ "$LD_RC" = 124 ]; then
+        echo "  FAIL linger-detection: outer timeout fired — loop hung waiting for lingering worker (rc=124)"
+        echo "$LD_OUT" | tail -10 | sed 's/^/      | /'
+        fail=1
+      elif ! printf '%s' "$LD_OUT" | grep -q 'reaping lingering worker'; then
+        echo "  FAIL linger-detection: reap message never appeared (worker was not reclaimed)"
+        echo "$LD_OUT" | tail -10 | sed 's/^/      | /'
+        fail=1
+      elif ! printf '%s' "$LD_OUT" | grep -q 'done after'; then
+        echo "  FAIL linger-detection: loop did not announce clean termination"
+        echo "$LD_OUT" | tail -10 | sed 's/^/      | /'
+        fail=1
+      elif [ "$LD_STATUS" != "BLOCKED" ]; then
+        echo "  FAIL linger-detection: task did not end up blocked (got $LD_STATUS)"
+        fail=1
+      else
+        echo "  PASS lingering-blocked worker reaped (grace-then-kill), loop terminated cleanly, task blocked"
+      fi
+    else
+      echo "  SKIP lingering-blocked worker (bd repo setup failed in tmp)"
+    fi
+    rm -rf "$LD" "$LMOCK" 2>/dev/null || true
+  else
+    echo "  SKIP lingering-blocked worker (bd not installed)"
+  fi
+
   if [ "$fail" = 0 ]; then echo "run/self-test: OK"; exit 0; else echo "run/self-test: FAILED"; exit 1; fi
 fi
 
@@ -432,9 +506,23 @@ spawn_worker() {
 # ---------- main loop: rolling parallel dispatch over `bd ready` ----------
 # Bash gotcha: under `set -u`, `${#assoc[@]}` errors on a never-assigned-to associative array. Keep
 # an explicit NRUN counter alongside the maps so the loop arithmetic is always defined.
-declare -A PID_TASK=() PID_ZONE=() PID_LOG=()
+declare -A PID_TASK=() PID_ZONE=() PID_LOG=() PID_START=() PID_DONE_AT=()
 NRUN=0
-i=0; stall=0; STALL_MAX="${CMP_STALL:-3}"; prev_closed="$(closed_count)"
+i=0; prev_closed="$(closed_count)"
+NOW() { date +%s; }
+LAST_PROGRESS_TS="$(NOW)"
+
+# Linger/stall knobs (wall-clock, seconds). Override via env in tests.
+#   CMP_POLL_SECS         — saturated-wait poll cadence (no more bare wait -n that hangs forever).
+#   CMP_WORKER_GRACE      — grace after bd shows task closed/blocked before we kill a lingering pid.
+#   CMP_WORKER_TIMEOUT    — absolute per-worker wall-clock cap (kill regardless of bd state).
+#   CMP_STALL_SECS        — no-progress wall-clock cap (advances even while NRUN>0 — the evaluator's
+#                            blind-spot fix: the old iteration-counter was gated on NRUN==0 and never
+#                            ticked while a worker lingered forever).
+POLL_SECS="${CMP_POLL_SECS:-2}"
+WORKER_GRACE="${CMP_WORKER_GRACE:-30}"
+WORKER_TIMEOUT="${CMP_WORKER_TIMEOUT:-1800}"
+STALL_SECS="${CMP_STALL_SECS:-600}"
 
 # zones currently in flight, as a JSON array of arrays — fed to dispatch_ids each iteration.
 running_zones_json() {
@@ -452,27 +540,118 @@ for line in sys.stdin.read().splitlines():
 print(json.dumps(xs))'
 }
 
+# Resolve a task's bd status (open|in_progress|closed|blocked|…). Empty string if unknown.
+bd_status_for() {
+  bd show "$1" --json 2>/dev/null | python3 -c '
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: d = []
+if isinstance(d, list):
+    d = d[0] if d else {}
+elif isinstance(d, dict):
+    d = d.get("issue") or d
+print((d or {}).get("status") or "")' 2>/dev/null
+}
+
+# Drop tracking for one PID + free its slot + clean log + mark progress made.
+_drop_pid() {
+  local pid="$1"
+  [ -f "${PID_LOG[$pid]:-/dev/null}" ] && rm -f "${PID_LOG[$pid]}" 2>/dev/null || true
+  unset 'PID_TASK[$pid]' 'PID_ZONE[$pid]' 'PID_LOG[$pid]' 'PID_START[$pid]' 'PID_DONE_AT[$pid]'
+  NRUN=$((NRUN > 0 ? NRUN - 1 : 0))
+  LAST_PROGRESS_TS="$(NOW)"
+}
+
+# Bounded kill: SIGTERM, brief grace, SIGKILL. Reaps the child's exit too.
+_kill_worker() {
+  local pid="$1"
+  kill -TERM "$pid" 2>/dev/null || true
+  # short grace for graceful shutdown
+  local g=0
+  while [ "$g" -lt 3 ] && kill -0 "$pid" 2>/dev/null; do sleep 1; g=$((g+1)); done
+  kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+}
+
 reap_finished() {
-  # Walk our tracked PIDs once; any that are no longer alive get reaped.
-  local pid
-  # Iterate tracked PIDs (assoc-array keys). Arrays are declared (=()), so "${!m[@]}" is empty-safe
-  # under `set -u` on bash 4.4+. The old ${!m[@]+...} guard mis-parsed as indirect expansion and fed
-  # task-ids in as a variable name — THE parallel-dispatch crash ("invalid variable name").
+  # Walk our tracked PIDs once. For each:
+  #   · already exited → wait + log tail + drop.
+  #   · alive AND bd shows task closed/blocked → it's a "finished-but-not-exited" linger.
+  #       Mark first-seen, wait WORKER_GRACE seconds, then kill+drop. This is the bug the bead
+  #       names: p4f committed + marked blocked but the claude pid hung around for 29min, NRUN
+  #       never dropped, and downstream disjoint work never dispatched.
+  #   · alive AND running too long (WORKER_TIMEOUT) → kill+drop. Backstop against generic hangs.
+  # Also: every iteration, refresh prev_closed and bump LAST_PROGRESS_TS on any new close — that's
+  # the wall-clock progress signal that subsumes the old NRUN==0-gated counter.
+  local pid now; now="$(NOW)"
   for pid in "${!PID_TASK[@]}"; do
+    local tid="${PID_TASK[$pid]}" log="${PID_LOG[$pid]}"
     if ! kill -0 "$pid" 2>/dev/null; then
-      local tid="${PID_TASK[$pid]}" log="${PID_LOG[$pid]}"
       wait "$pid" 2>/dev/null || true
       echo "run: worker pid=$pid task=$tid finished — log tail:"
       [ -f "$log" ] && tail -8 "$log" | sed 's/^/    /' || echo "    (no log)"
-      [ -f "$log" ] && rm -f "$log"
-      unset 'PID_TASK[$pid]' 'PID_ZONE[$pid]' 'PID_LOG[$pid]'
-      NRUN=$((NRUN > 0 ? NRUN - 1 : 0))
+      _drop_pid "$pid"
+      continue
     fi
+    # Alive: classify.
+    local s; s="$(bd_status_for "$tid")"
+    if [ "$s" = "closed" ] || [ "$s" = "blocked" ]; then
+      if [ -z "${PID_DONE_AT[$pid]:-}" ]; then
+        PID_DONE_AT[$pid]="$now"
+        echo "run: worker pid=$pid task=$tid settled in bd ($s) but pid still alive — grace ${WORKER_GRACE}s before reap"
+      fi
+      local done_at="${PID_DONE_AT[$pid]}"
+      if [ "$((now - done_at))" -ge "$WORKER_GRACE" ]; then
+        echo "run: reaping lingering worker pid=$pid task=$tid (state=$s, waited $((now - done_at))s)"
+        _kill_worker "$pid"
+        _drop_pid "$pid"
+      fi
+    else
+      local start="${PID_START[$pid]:-$now}"
+      if [ "$((now - start))" -ge "$WORKER_TIMEOUT" ]; then
+        echo "run: worker pid=$pid task=$tid exceeded WORKER_TIMEOUT ${WORKER_TIMEOUT}s — killing"
+        _kill_worker "$pid"
+        _drop_pid "$pid"
+      fi
+    fi
+  done
+  local cc; cc="$(closed_count)"; cc="${cc:-0}"
+  if [ "$cc" -gt "${prev_closed:-0}" ]; then
+    prev_closed="$cc"
+    LAST_PROGRESS_TS="$(NOW)"
+  fi
+}
+
+# Bounded wait for a worker slot to free. NEVER `wait -n`: a lingering child whose process refuses
+# to exit makes that block forever (the original failure mode). Instead poll-then-reap and check
+# the wall-clock stall budget on every tick so the loop always makes a decision.
+wait_for_slot() {
+  while [ "$NRUN" -ge "$PARALLEL" ]; do
+    sleep "$POLL_SECS"
+    reap_finished || true
+    local now; now="$(NOW)"
+    if [ "$((now - LAST_PROGRESS_TS))" -ge "$STALL_SECS" ]; then
+      echo "run: no progress for ${STALL_SECS}s while saturated — killing in-flight workers and stopping."
+      _kill_all_workers
+      return 1
+    fi
+  done
+  return 0
+}
+
+_kill_all_workers() {
+  local pid
+  for pid in "${!PID_TASK[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done
+  sleep 1
+  for pid in "${!PID_TASK[@]}"; do
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    _drop_pid "$pid"
   done
 }
 
 while true; do
-  # Reap any finished workers (non-blocking) so freed slots get refilled on this tick.
+  # Reap any finished/settled workers (non-blocking) so freed slots get refilled on this tick.
   reap_finished || true
 
   n="$(ready_count)"; n="${n:-0}"
@@ -482,9 +661,7 @@ while true; do
 
   free=$(( PARALLEL - $NRUN ))
   if [ "$free" -le 0 ]; then
-    # Saturated — block until at least one worker exits, then loop.
-    wait -n 2>/dev/null || true
-    reap_finished || true
+    if ! wait_for_slot; then break; fi
     continue
   fi
 
@@ -495,10 +672,9 @@ while true; do
 
   if [ -z "$ids" ]; then
     # Nothing else dispatchable right now (everything pending overlaps something running, or queue
-    # is fully empty). If workers are alive, wait one out and retry. If not, we're truly done.
+    # is fully empty). If workers are alive, poll until one frees up; if not, we're truly done.
     if [ "$NRUN" -gt 0 ]; then
-      wait -n 2>/dev/null || true
-      reap_finished || true
+      if ! wait_for_slot; then break; fi
       continue
     else
       echo "run: bd ready is empty — done after $i iteration(s)."; break
@@ -539,6 +715,7 @@ while true; do
       PID_TASK[$pid]="$tid"
       PID_ZONE[$pid]="$zone_json"
       PID_LOG[$pid]="$log"
+      PID_START[$pid]="$(NOW)"
       NRUN=$((NRUN + 1))
     fi
   done
@@ -552,23 +729,19 @@ while true; do
   # pushes broken intermediate state to the remote.
   [ "${CMP_PUSH:-0}" = 1 ] && { git push >/dev/null 2>&1 || true; }
 
-  # stall detector: bail if no task has closed for STALL_MAX iterations (a crashing/no-op worker or
-  # an unresolvable task) — don't burn the whole --max budget making zero progress. We check this
-  # only when nothing is in flight, otherwise an active worker counts as progress in progress.
-  if [ "$NRUN" -eq 0 ]; then
-    now_closed="$(closed_count)"
-    if [ "${now_closed:-0}" -gt "${prev_closed:-0}" ]; then stall=0; else stall=$((stall + 1)); fi
-    prev_closed="$now_closed"
-    if [ "$stall" -ge "$STALL_MAX" ]; then
-      echo "run: no task closed in $STALL_MAX iteration(s) — stopping (stuck/crashing worker or unresolvable task)."
-      echo "     inspect 'bd list --status in_progress' for abandoned claims (reset: bd update <id> --status open)."
-      break
-    fi
+  # Wall-clock stall: works whether NRUN is 0 or >0. The old iteration-counter ticked only when
+  # NRUN==0, which let a lingering-but-alive worker hold the loop hostage indefinitely.
+  now_ts="$(NOW)"
+  if [ "$((now_ts - LAST_PROGRESS_TS))" -ge "$STALL_SECS" ]; then
+    echo "run: no progress (no close/reap) for ${STALL_SECS}s — stopping; killing in-flight workers."
+    echo "     inspect 'bd list --status in_progress' for abandoned claims (reset: bd update <id> --status open)."
+    _kill_all_workers
+    break
   fi
   if [ "$MAX" -gt 0 ] && [ "$i" -ge "$MAX" ]; then
     echo "run: reached max $MAX iteration(s) — draining in-flight workers."
     while [ "$NRUN" -gt 0 ]; do
-      wait -n 2>/dev/null || true; reap_finished || true
+      if ! wait_for_slot; then break; fi
     done
     break
   fi
