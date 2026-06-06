@@ -1,0 +1,13 @@
+# completely — config for the harness's OWN repo, so `cmpl check` gates completely itself
+# (dogfood: previously `cmpl check` was a no-op here — no [check] table, no auto-detected stack).
+
+[project]
+name = "completely"
+kind = "existing"
+
+# Quality checks run by `cmpl check`, in order. cwd is relative to the repo root.
+[check]
+commands = [
+  { name = "ruff",      cwd = "plugin", cmd = "ruff check scripts/" },
+  { name = "contracts", cmd = "bash plugin/tests/contracts.sh" },
+]
