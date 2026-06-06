@@ -1,5 +1,6 @@
-# completely tested upstream versions (v0.2 baseline)
-bd=bd version 0.63.3 (884cc117: HEAD@884cc1171e3e)
-gsd=1.20.5
-ralph=7963c6a
-claude-mem=10.3.1
+# completely tested upstream versions (v0.9 — latest channels)
+# bd: gastownhall/beads (release binary | npm @beads/bd) · gsd: @opengsd/gsd-core · claude-mem: thedotmack
+# ralph is NOT pinned: completely implements the loop in run.sh (overlay), not a plugin dep.
+bd=1.0.5
+gsd=1.3.1
+claude-mem=13.4.0

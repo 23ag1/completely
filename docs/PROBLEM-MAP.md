@@ -2,7 +2,7 @@
 
 Sources: my deterministic mock-loop tests (`plugin/tests/loop-mock.sh`), the live istok auto run,
 and the real bug trackers of the upstreams completely sits on — Beads (gastownhall/beads, ~30 open),
-GSD (gsd-build/get-shit-done), and the ralph pattern (no public tracker; failure modes from its
+GSD (open-gsd/gsd-core — the active canonical), and the ralph pattern (no public tracker; failure modes from its
 blog/our observation + claude-plugins-official). Each row: does it apply to us, is it verified, status.
 
 Legend: ✅ fixed · 🟡 mitigated/partial · 🔴 open · ⬜ N/A (design avoids it)
@@ -44,7 +44,7 @@ Legend: ✅ fixed · 🟡 mitigated/partial · 🔴 open · ⬜ N/A (design avoi
 |---|---|---|---|---|
 | D1 | missing `version` in plugin.json → `unknown/` cache dir, breaks | claude-plugins #2361 | yes — I hit version-pinning issues | ✅ version set + bumped each release |
 | D2 | `cmpl` not on PATH (stripped shim) / symlink resolution | observed | yes | ✅ v0.5 full-CLI wrapper + readlink |
-| D3 | upstream channel is a squatter (`get-shit-done` npm = a timer) | observed | yes | ✅ verified real channels (`get-shit-done-cc`) |
+| D3 | GSD channel confusion (`get-shit-done` npm = squatter timer; `get-shit-done-cc` = older fork, 11 agents) | observed | yes | ✅ retargeted to active canonical `@opengsd/gsd-core` 1.3.1 (33 agents, superset) |
 
 ## Top priorities (what to fix next, by impact)
 1. **B-NEW** — `cmpl auto` must distinguish a `bd ready` ERROR from an empty queue (today a bd crash = silent false "done"). HIGH, cheap.

@@ -13,10 +13,10 @@ QFILE="$STATE/quarantine.txt"
 [ -f "$LOCK" ] || { echo "doctor: no versions.lock (run install)"; exit 0; }
 
 ver(){ case "$1" in
-  bd)         bd version 2>/dev/null | head -1 ;;
-  gsd)        cat "$HOME/.claude/get-shit-done/VERSION" 2>/dev/null ;;
+  bd)         bd version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
+  gsd)        cat "$HOME/.claude/gsd-core/VERSION" 2>/dev/null ;;
   ralph)      git -C "$HOME/.claude/ralph-loop" rev-parse --short HEAD 2>/dev/null ;;
-  claude-mem) ls "$HOME/.claude/plugins/cache/thedotmack/claude-mem" 2>/dev/null | head -1 ;;
+  claude-mem) ls "$HOME/.claude/plugins/cache/thedotmack/claude-mem" 2>/dev/null | sort -V | tail -1 ;;
 esac; }
 affected(){ case "$1" in   # which completely components depend on this upstream
   gsd)        echo "emit (GSD PLAN.md parser)";;

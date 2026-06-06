@@ -9,8 +9,8 @@
 #
 # Dependency reality (honest): completely HARD-depends only on **Beads (bd)**. GSD (planning) and
 # claude-mem (memory) are optional composition; **Ralph is NOT used by completely's loop** (the
-# overlay supersedes it) — offered only because it's part of the stack. GSD has no verified plugin
-# channel (manual install). Backend for `cmpl setup` and the plugin Setup hook.
+# overlay supersedes it) — offered only because it's part of the stack. GSD installs via npx
+# (open-gsd/gsd-core, --claude --global). Backend for `cmpl setup` and the plugin Setup hook.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT="."; APPLY=0; INSTALL=0; DRY=0
@@ -28,16 +28,16 @@ done
 present() {  # echo version if installed, empty if absent (CMP_FAKE_MISSING forces absent, for tests)
   case " ${CMP_FAKE_MISSING:-} " in *" $1 "*) return 0 ;; esac
   case "$1" in
-    bd)         command -v bd >/dev/null 2>&1 && bd version 2>/dev/null | head -1 ;;
-    gsd)        cat "$HOME/.claude/get-shit-done/VERSION" 2>/dev/null ;;
+    bd)         command -v bd >/dev/null 2>&1 && bd version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
+    gsd)        cat "$HOME/.claude/gsd-core/VERSION" 2>/dev/null ;;
     ralph)      git -C "$HOME/.claude/ralph-loop" rev-parse --short HEAD 2>/dev/null ;;
-    claude-mem) ls "$HOME/.claude/plugins/cache/thedotmack/claude-mem" 2>/dev/null | head -1 ;;
+    claude-mem) ls "$HOME/.claude/plugins/cache/thedotmack/claude-mem" 2>/dev/null | sort -V | tail -1 ;;
   esac
 }
 hint() {
   case "$1" in
     bd)         echo "brew install beads | npm i -g @beads/bd | github.com/gastownhall/beads" ;;
-    gsd)        echo "npx get-shit-done-cc --global  (TACHES, npm)" ;;
+    gsd)        echo "npx --yes @opengsd/gsd-core@latest --claude --global  (open-gsd, npm)" ;;
     ralph)      echo "claude plugin install ralph-loop@claude-plugins-official" ;;
     claude-mem) echo "claude plugin install claude-mem@thedotmack" ;;
   esac
@@ -58,13 +58,39 @@ install_one() {
       if command -v claude >/dev/null 2>&1; then run "claude plugin install ralph-loop@claude-plugins-official"
       else echo "    claude CLI not found → $(hint ralph)"; fi ;;
     gsd)
-      if command -v npx >/dev/null 2>&1; then run "npx get-shit-done-cc --global"
+      if command -v npx >/dev/null 2>&1; then run "npx --yes @opengsd/gsd-core@latest --claude --global"
       else echo "    npx (node) not found → $(hint gsd)"; fi ;;
   esac
 }
 
 REQUIRED="bd"
 OPTIONAL="gsd claude-mem ralph"
+
+# ensure completely AUTO-UPDATES for this user: register its marketplace with autoUpdate=true
+# (third-party marketplaces default to auto-update OFF, so we opt in explicitly via the NATIVE
+# mechanism — no custom self-update hook). Idempotent; only writes when a change is needed.
+SETTINGS="$HOME/.claude/settings.json"
+if command -v python3 >/dev/null 2>&1; then
+  python3 - "$SETTINGS" <<'PY' || true
+import json, os, sys
+p = sys.argv[1]
+try:
+    s = json.load(open(p)) if os.path.exists(p) else {}
+except Exception:
+    s = {}
+ekm = s.setdefault("extraKnownMarketplaces", {})
+entry = ekm.get("completely") or {}
+changed = False
+if not entry.get("source"):
+    entry["source"] = {"source": "github", "repo": "23ag1/completely"}; changed = True
+if entry.get("autoUpdate") is not True:
+    entry["autoUpdate"] = True; changed = True
+if changed:
+    ekm["completely"] = entry
+    json.dump(s, open(p, "w"), indent=2)
+    print("== completely: auto-update ENABLED (extraKnownMarketplaces.completely.autoUpdate=true) ==")
+PY
+fi
 
 # ensure the FULL cmpl is on PATH (the plugin doesn't add bin/ to PATH itself — this is the fix
 # for the "cmpl is only the minimal sync|doctor build" bug). Runs on the Setup hook + cmpl setup.

@@ -6,7 +6,7 @@
 
 ## 0. What was read (grounding, not hand-waving)
 - Ralph: `~/.claude/ralph-loop/loop.sh`, `commands/ralph/build.md`, `ralph-loop/AGENTS.md`.
-- GSD: `~/.claude/commands/gsd/*` (execute-phase, check-todos, …), `get-shit-done/workflows/`, `agents/gsd-*`.
+- GSD: `@opengsd/gsd-core` → `~/.claude/skills/gsd-*` (67), `~/.claude/agents/gsd-*` (33), `~/.claude/gsd-core/VERSION`.
 - Beads: live db (`bd ready/stats`), `.beads/` git-managed hooks, project `AGENTS.md` rules.
 - claude-mem: `plugins/.../claude-mem` hooks (SessionStart context injection).
 - harness (this repo): hooks + evaluator + DoD + self-tooling.
@@ -263,7 +263,7 @@ dimensions), `lint` (enforce required sections per type), `--readonly` (worker s
 
 ## 10. Per-tool detail cards (verified surfaces, not assumptions)
 
-**GSD** — `get-shit-done/` (has `VERSION`)
+**GSD** — `@opengsd/gsd-core` (open-gsd; `~/.claude/gsd-core/VERSION` = 1.3.1, 33 agents, 67 skills; we invoke 6)
 - Shape: thin command (`commands/gsd/*.md`) → workflow logic (`workflows/*.md`, 34 files) →
   `bin/gsd-tools.cjs` (Node state CLI: `init <workflow>`, `init todos`, …) → **11 subagents**
   (`agents/gsd-*`) → references = the "constitution" (model-profiles, tdd, verification-patterns,
