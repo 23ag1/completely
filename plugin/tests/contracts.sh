@@ -52,10 +52,35 @@ D=$(mktmp); ( cd "$D" && bd create "bad" -t task >/dev/null 2>&1 )
 ( cd "$D" && BAD=$(bd list --json | python3 -c 'import json,sys
 d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
 print([i["id"] for i in d if i["title"]=="bad"][0])'); bd close "$BAD" >/dev/null 2>&1
-  bd create "good" -t task --acceptance "x works" --design "approach" --metadata '{"write_zone":["a.ts"]}' >/dev/null 2>&1 )
+  bd create "good" -t task --acceptance "x works" --design "approach" --metadata '{"write_zone":["a.ts"],"verify":"npm test"}' >/dev/null 2>&1 )
 ( cd "$D" && bash "$ROOT/scripts/lint.sh" >/dev/null 2>&1 ) && r=0 || r=1
 [ "$r" = 0 ] && ok "lint PASSes when contract present" || no "lint PASSes when contract present"
 rm -rf "$D"
+
+echo "== lint: metadata.verify required + entrypoint real-path floor =="
+D=$(mktmp)
+( cd "$D" && bd create "nv" -t task --acceptance x --design y --metadata '{"write_zone":["a.ts"]}' >/dev/null 2>&1 )
+( cd "$D" && bash "$ROOT/scripts/lint.sh" >/dev/null 2>&1 ) && rv=0 || rv=1
+[ "$rv" = 1 ] && ok "lint FAILs on missing metadata.verify" || no "lint missing-verify"
+( cd "$D" && nv=$(bd list --json | python3 -c 'import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+print([i["id"] for i in d if i["title"]=="nv"][0])'); bd close "$nv" >/dev/null 2>&1 )
+( cd "$D" && bd create "epx" -t task --acceptance x --design y --metadata '{"write_zone":["plugin/scripts/run.sh"],"verify":"pytest tests/test_x.py"}' >/dev/null 2>&1 )
+( cd "$D" && bash "$ROOT/scripts/lint.sh" >/dev/null 2>&1 ) && rv=0 || rv=1
+[ "$rv" = 1 ] && ok "lint FAILs entrypoint task with proxy verify" || no "lint entrypoint-proxy-verify"
+( cd "$D" && ep=$(bd list --json | python3 -c 'import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+print([i["id"] for i in d if i["title"]=="epx"][0])'); bd close "$ep" >/dev/null 2>&1 )
+( cd "$D" && bd create "epr" -t task --acceptance x --design y --metadata '{"write_zone":["plugin/scripts/run.sh"],"verify":"bash plugin/tests/contracts.sh"}' >/dev/null 2>&1 )
+( cd "$D" && bash "$ROOT/scripts/lint.sh" >/dev/null 2>&1 ) && rv=0 || rv=1
+[ "$rv" = 0 ] && ok "lint PASSes entrypoint task with real-path verify" || no "lint entrypoint-real-verify"
+( cd "$D" && bd create "hookx" -t task --acceptance x --design y --metadata '{"write_zone":["plugin/hooks/guard-x.sh"],"verify":"pytest unit"}' >/dev/null 2>&1 )
+( cd "$D" && bash "$ROOT/scripts/lint.sh" >/dev/null 2>&1 ) && rv=0 || rv=1
+[ "$rv" = 1 ] && ok "lint FAILs hooks-entrypoint task w/ proxy verify (HIGH#1 fix)" || no "lint hooks-entrypoint"
+rm -rf "$D"
+
+echo "== cmpl lint self-test (NCR/blocked path — now gated by cmpl test) =="
+if bash "$ROOT/scripts/lint.sh" --self-test >/dev/null 2>&1; then ok "lint.sh --self-test green (NCR + blocked + verify-clean)"; else no "lint.sh --self-test"; fi
 
 echo "== emit idempotency =="
 D=$(mktmp)
@@ -227,10 +252,10 @@ print(",".join(names))')
 
 echo "== plan-apply (Beads-first, no markdown) =="
 D=$(mktmp)
-printf '%s' '{"epic":"E","tasks":[{"key":"a","title":"A","acceptance":"x","design":"y","write_zone":["a"],"deps":[]},{"key":"b","title":"B","acceptance":"x","design":"y","write_zone":["b"],"deps":["a"]}]}' \
+printf '%s' '{"epic":"E","tasks":[{"key":"a","title":"A","acceptance":"x","design":"y","write_zone":["a"],"verify":"pytest -q","deps":[]},{"key":"b","title":"B","acceptance":"x","design":"y","write_zone":["b"],"verify":"pytest -q","deps":["a"]}]}' \
   | ( cd "$D" && bash "$ROOT/scripts/plan.sh" >/dev/null 2>&1 )
 n1=$(count "$D")
-printf '%s' '{"epic":"E","tasks":[{"key":"a","title":"A","acceptance":"x","design":"y","write_zone":["a"],"deps":[]},{"key":"b","title":"B","acceptance":"x","design":"y","write_zone":["b"],"deps":["a"]}]}' \
+printf '%s' '{"epic":"E","tasks":[{"key":"a","title":"A","acceptance":"x","design":"y","write_zone":["a"],"verify":"pytest -q","deps":[]},{"key":"b","title":"B","acceptance":"x","design":"y","write_zone":["b"],"verify":"pytest -q","deps":["a"]}]}' \
   | ( cd "$D" && bash "$ROOT/scripts/plan.sh" >/dev/null 2>&1 )
 n2=$(count "$D")
 { [ "$n1" = "$n2" ] && [ "$n1" -ge 3 ]; } && ok "plan-apply idempotent ($n1->$n2)" || no "plan-apply idempotency ($n1->$n2)"

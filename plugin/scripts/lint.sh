@@ -82,7 +82,7 @@ print(d.get("status","") if isinstance(d,dict) else "")' ); }
   trap 'rm -rf "$D"' EXIT
   ( cd "$D" && git init -q && bd init proj --stealth >/dev/null 2>&1 ) || { echo "FAIL init"; exit 1; }
   # WORKER bead: well-formed, claimed (in_progress). This is the bead the NCR must attach to.
-  ( cd "$D" && bd create "worker bead" -t task --acceptance a --design d --metadata '{"write_zone":["a"]}' >/dev/null 2>&1 )
+  ( cd "$D" && bd create "worker bead" -t task --acceptance a --design d --metadata '{"write_zone":["a"],"verify":"npm test"}' >/dev/null 2>&1 )
   WID="$(fetch_bid "$D" "worker bead")"
   [ -n "$WID" ] || { echo "FAIL locate WID"; exit 1; }
   ( cd "$D" && bd update "$WID" --claim >/dev/null 2>&1 )
