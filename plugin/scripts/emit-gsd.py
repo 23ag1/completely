@@ -13,8 +13,10 @@ after GSD re-plans reconciles instead of duplicating. checkpoint:* tasks become 
 issues labelled `checkpoint` (skipped by `cmpl lint`'s worker-contract check).
 
 Usage: emit-gsd.py <PLAN.md>
-Validated against GSD 1.20.x PLAN.md task syntax. Re-check against your GSD version if it drifts.
+Validated against GSD 1.3.1 PLAN.md — frontmatter (wave/depends_on/requirements/must_haves) +
+task tags <name>/<files>/<action>/<verify>/<done>. Re-check against your GSD version if it drifts.
 """
+
 import hashlib
 import json
 import os
@@ -46,6 +48,118 @@ def load_existing() -> dict:
     return out
 
 
+def _fm_unq(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] in "\"'" and v[-1] == v[0]:
+        return v[1:-1]
+    return v
+
+
+def _fm_scalar(v):
+    v = v.strip()
+    if v.startswith("[") and v.endswith("]"):
+        inner = v[1:-1].strip()
+        return [_fm_unq(x) for x in inner.split(",") if x.strip()] if inner else []
+    return _fm_unq(v)
+
+
+def _fm_parse(toks, i, indent):
+    """Recursive-descent over (indent, text) tokens: mappings, block/flow lists, dicts-in-seq."""
+    if toks[i][1].startswith("- "):
+        seq = []
+        while i < len(toks) and toks[i][0] == indent and toks[i][1].startswith("- "):
+            body = toks[i][1][2:].strip()
+            if ":" in body and not body.startswith("["):
+                d = {}
+                k, _, v = body.partition(":")
+                if v.strip():
+                    d[k.strip()] = _fm_scalar(v)
+                i += 1
+                while (
+                    i < len(toks)
+                    and toks[i][0] > indent
+                    and not toks[i][1].startswith("- ")
+                ):
+                    kk, _, vv = toks[i][1].partition(":")
+                    d[kk.strip()] = _fm_scalar(vv) if vv.strip() else ""
+                    i += 1
+                seq.append(d)
+            else:
+                seq.append(_fm_scalar(body))
+                i += 1
+        return seq, i
+    d = {}
+    while i < len(toks) and toks[i][0] == indent and not toks[i][1].startswith("- "):
+        k, _, v = toks[i][1].partition(":")
+        key = k.strip()
+        if v.strip():
+            d[key] = _fm_scalar(v)
+            i += 1
+        else:
+            i += 1
+            if i < len(toks) and toks[i][0] > indent:
+                child, i = _fm_parse(toks, i, toks[i][0])
+                d[key] = child
+            else:
+                d[key] = []
+    return d, i
+
+
+def parse_frontmatter(text):
+    """Parse a leading `--- ... ---` YAML frontmatter block. Minimal subset, no yaml dep —
+    handles scalars, inline [a, b] and block lists, nested mappings, and `- key: val` dicts.
+    Returns {} if absent; on parse error returns {'_raw': block} + warns (never silent)."""
+    m = re.match(r"^---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", text, re.S)
+    if not m:
+        return {}
+    rawfm = m.group(1)
+    toks = [
+        (len(ln) - len(ln.lstrip(" ")), ln.strip())
+        for ln in rawfm.split("\n")
+        if ln.strip() and not ln.lstrip().startswith("#")
+    ]
+    if not toks:
+        return {}
+    try:
+        node, _ = _fm_parse(toks, 0, toks[0][0])
+        return node if isinstance(node, dict) else {}
+    except Exception as e:
+        print("  ! frontmatter parse failed (%s) — storing raw" % e, file=sys.stderr)
+        return {"_raw": rawfm}
+
+
+def _bd_list_all():
+    """Fetch every issue once (callers share it — avoids N+1 `bd list` and TOCTOU skew)."""
+    r = bd("list", "--all", "--json")
+    try:
+        d = json.loads(r.stdout or "[]")
+    except Exception:
+        d = []
+    return d if isinstance(d, list) else d.get("issues", [])
+
+
+def epics_by_planlabel(data):
+    """Map `gsd-plan-<phase>-<plan>` label -> epic id, for cross-plan dependency resolution."""
+    out = {}
+    for it in data:
+        if it.get("issue_type") != "epic":
+            continue
+        for lab in it.get("labels", []) or []:
+            if isinstance(lab, str) and lab.startswith("gsd-plan-"):
+                out[lab] = it["id"]
+    return out
+
+
+def children_of(epic_id, data):
+    """Task ids under an epic (bd uses hierarchical ids: <epic>.<n>)."""
+    pre = epic_id + "."
+    return [
+        it["id"]
+        for it in data
+        if str(it.get("id", "")).startswith(pre) and it.get("issue_type") != "epic"
+    ]
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print("usage: emit-gsd.py <PLAN.md>", file=sys.stderr)
@@ -55,8 +169,16 @@ def main() -> int:
     rel = os.path.relpath(plan)
     existing = load_existing()
 
-    def upsert(ref, title, typ="task", parent=None, acceptance="", design="",
-               metadata=None, extra_labels=()):
+    def upsert(
+        ref,
+        title,
+        typ="task",
+        parent=None,
+        acceptance="",
+        design="",
+        metadata=None,
+        extra_labels=(),
+    ):
         lab = srclabel(ref)
         labels = ",".join([lab, "gsd-emit", *extra_labels])
         if lab in existing:
@@ -99,14 +221,32 @@ def main() -> int:
         try:
             nid = json.loads(r.stdout)["id"]
         except Exception:
-            print("  ! create failed: %s\n    %s" % (title, r.stderr.strip()), file=sys.stderr)
+            print(
+                "  ! create failed: %s\n    %s" % (title, r.stderr.strip()),
+                file=sys.stderr,
+            )
             return None, "error"
         existing[lab] = nid
         return nid, "created"
 
+    fm = parse_frontmatter(text)
     m = re.search(r"^#\s+(.+)$", text, re.M)
     epic_title = m.group(1).strip() if m else os.path.basename(plan)
-    epic_id, _ = upsert("gsd:%s#epic" % rel, epic_title, typ="epic")
+    epic_meta = {
+        k: fm[k]
+        for k in ("phase", "plan", "wave", "depends_on", "requirements", "must_haves")
+        if fm.get(k) not in (None, "", [], {})
+    }
+    plan_label = ()
+    if fm.get("phase") and fm.get("plan"):
+        plan_label = ("gsd-plan-%s-%s" % (fm["phase"], fm["plan"]),)
+    epic_id, _ = upsert(
+        "gsd:%s#epic" % rel,
+        epic_title,
+        typ="epic",
+        metadata=epic_meta or None,
+        extra_labels=plan_label,
+    )
     if not epic_id:
         return 1
 
@@ -115,6 +255,7 @@ def main() -> int:
         return mm.group(1).strip() if mm else ""
 
     created = updated = 0
+    task_ids = []
     for tb in re.finditer(r"<task\b([^>]*)>(.*?)</task>", text, re.S):
         attrs, body = tb.group(1), tb.group(2)
         tm = re.search(r'type="([^"]+)"', attrs)
@@ -127,7 +268,9 @@ def main() -> int:
         ref = "gsd:%s#%s" % (rel, name)
         if typ.startswith("checkpoint"):
             nid, st = upsert(
-                ref, name, parent=epic_id,
+                ref,
+                name,
+                parent=epic_id,
                 design=el(body, "how-to-verify") or el(body, "what-built"),
                 metadata={"checkpoint": typ},
                 extra_labels=("checkpoint", typ.replace(":", "-")),
@@ -137,20 +280,52 @@ def main() -> int:
             files = el(body, "files")
             verify = el(body, "verify")
             if files:
-                md["write_zone"] = [f.strip() for f in re.split(r"[,\n]", files) if f.strip()]
+                md["write_zone"] = [
+                    f.strip() for f in re.split(r"[,\n]", files) if f.strip()
+                ]
             if verify:
                 md["verify"] = verify
+            if fm.get("requirements"):
+                md["requirements"] = fm["requirements"]
             nid, st = upsert(
-                ref, name, parent=epic_id,
-                acceptance=el(body, "done"), design=el(body, "action"),
-                metadata=md, extra_labels=(typ,),
+                ref,
+                name,
+                parent=epic_id,
+                acceptance=el(body, "done"),
+                design=el(body, "action"),
+                metadata=md,
+                extra_labels=(typ,),
             )
         if st == "created":
             created += 1
         elif st == "updated":
             updated += 1
         if nid:
+            task_ids.append(nid)
             print("  %s %s  %s" % ("+" if st == "created" else "=", nid, name))
+
+    # intra-plan dependency chain (document order) — interface-first default. This APPROXIMATES
+    # GSD's wave DAG: GSD encodes parallelism ACROSS PLAN files, not within one. The cross-plan
+    # edges below carry the real wave ordering at task level (so `bd ready` actually gates waves).
+    for prev, cur in zip(task_ids, task_ids[1:]):
+        bd("dep", "add", cur, "--depends-on", prev)
+    deps = fm.get("depends_on") or []
+    if task_ids and deps:
+        allissues = _bd_list_all()
+        label_map = epics_by_planlabel(allissues)
+        for dep in deps:
+            # exact match only: depends_on uses GSD's `<phase>-<plan>` id, label is gsd-plan-<that>.
+            # No substring fallback — a near-miss is a real data bug to surface loudly, not guess.
+            dep_epic = label_map.get("gsd-plan-%s" % dep)
+            if not dep_epic:
+                print(
+                    "  ! cross-plan dep '%s' (label gsd-plan-%s) not found — emit it first? skipped"
+                    % (dep, dep),
+                    file=sys.stderr,
+                )
+                continue
+            for t in children_of(dep_epic, allissues):
+                bd("dep", "add", task_ids[0], "--depends-on", t)
 
     print("emit: epic %s; +%d created, ~%d existing" % (epic_id, created, updated))
     return 0

@@ -50,6 +50,102 @@ printf '# P\n<tasks>\n<task type="auto"><name>T1</name><files>a.ts</files><actio
 { [ "$m1" = 2 ] && [ "$m2" = 2 ]; } && ok "emit epic+task idempotent ($m1->$m2)" || no "emit idempotency ($m1->$m2)"
 rm -rf "$D"
 
+echo "== bridge: GSD frontmatter -> Beads (waves + must_haves) =="
+D=$(mktmp)
+cat > "$D/09-01-PLAN.md" <<'PLAN'
+---
+phase: 09-bridge
+plan: 01
+type: execute
+wave: 1
+depends_on: []
+requirements: [BR-01, BR-02]
+must_haves:
+  truths:
+    - "emit writes must_haves onto the epic"
+  artifacts:
+    - path: "plugin/scripts/emit-gsd.py"
+      provides: "frontmatter parser"
+  key_links:
+    - from: "epic"
+      to: "evaluator"
+---
+# Bridge plan 01
+<tasks>
+<task type="auto">
+  <name>T1 alpha</name>
+  <files>a.py</files>
+  <action>do A</action>
+  <verify>pytest</verify>
+  <done>alpha works</done>
+</task>
+<task type="auto">
+  <name>T2 beta</name>
+  <files>b.py</files>
+  <action>do B</action>
+  <verify>pytest</verify>
+  <done>beta works</done>
+</task>
+</tasks>
+PLAN
+( cd "$D" && bash "$ROOT/scripts/emit.sh" 09-01-PLAN.md >/dev/null 2>&1 )
+EM=$( cd "$D" && bd list --all --json 2>/dev/null | python3 -c '
+import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+ep=[i for i in d if i.get("issue_type")=="epic"]
+m=(ep[0].get("metadata") or {}) if ep else {}
+print("OK" if (m.get("must_haves") and m.get("requirements")) else "NO")' )
+[ "$EM" = OK ] && ok "bridge: epic carries must_haves + requirements" || no "bridge epic metadata ($EM)"
+RW=$( cd "$D" && bd ready --json 2>/dev/null | python3 -c '
+import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+t=[i["title"] for i in d if i.get("issue_type")!="epic"]
+print("OK" if (any("alpha" in x for x in t) and not any("beta" in x for x in t)) else "NO")' )
+[ "$RW" = OK ] && ok "bridge: intra-plan edge — only T1 ready" || no "bridge wave gating ($RW)"
+AC=$( cd "$D" && bd list --all --json 2>/dev/null | python3 -c '
+import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+v=[i.get("acceptance_criteria") for i in d if "alpha" in i.get("title","")]
+print(v[0] if v else "")' )
+[ "$AC" = "alpha works" ] && ok "bridge: acceptance maps from <done>" || no "bridge acceptance source ($AC)"
+cat > "$D/09-02-PLAN.md" <<'PLAN'
+---
+phase: 09-bridge
+plan: 02
+type: execute
+wave: 2
+depends_on: [09-bridge-01]
+requirements: [BR-03]
+must_haves:
+  truths:
+    - "second plan exists"
+---
+# Bridge plan 02
+<tasks>
+<task type="auto">
+  <name>T3 gamma</name>
+  <files>c.py</files>
+  <action>do C</action>
+  <verify>pytest</verify>
+  <done>gamma works</done>
+</task>
+</tasks>
+PLAN
+( cd "$D" && bash "$ROOT/scripts/emit.sh" 09-02-PLAN.md >/dev/null 2>&1 )
+XP=$( cd "$D" && bd ready --json 2>/dev/null | python3 -c '
+import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+print("OK" if not any("gamma" in i["title"] for i in d) else "NO")' )
+[ "$XP" = OK ] && ok "bridge: cross-plan edge gates plan-02 tasks" || no "bridge cross-plan edge ($XP)"
+( cd "$D" && bash "$ROOT/scripts/emit.sh" 09-01-PLAN.md >/dev/null 2>&1 )
+RE=$( cd "$D" && bd ready --json 2>/dev/null | python3 -c '
+import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+t=[i["title"] for i in d if i.get("issue_type")!="epic"]
+print("OK" if (any("alpha" in x for x in t) and not any("beta" in x for x in t) and not any("gamma" in x for x in t)) else "NO")' )
+[ "$RE" = OK ] && ok "bridge: re-emit keeps edges stable (idempotent graph)" || no "bridge re-emit idempotency ($RE)"
+rm -rf "$D"
+
 echo "== doctor =="
 bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1 && ok "doctor runs" || no "doctor runs"
 
