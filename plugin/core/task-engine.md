@@ -11,8 +11,12 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
 ## Per-task recipe (full power, no cuts)
 
 0. **CLAIM.** `bd update <id> --claim`; read `acceptance`, `design`, `metadata.write_zone`,
-   `metadata.verify`. If the next ready item is a human gate (label `checkpoint`) → PAUSE for the
-   human; do not proceed past a gate.
+   `metadata.verify`, and **`metadata.read_context`** — the files/interfaces you must READ first to
+   understand the task (write_zone is where you WRITE; read_context is what you must not guess, and
+   usually sits OUTSIDE the write_zone). In `cmpl run` the dispatch header injects read_context
+   inline so a fresh worker reads it BEFORE step 1 (the planner fills it via `cmpl plan-apply`).
+   If the next ready item is a human gate (label `checkpoint`) → PAUSE for the human; do not proceed
+   past a gate.
 
 1. **UNDERSTAND (don't guess).**
    - First: **`cmpl craft`** → the stack-routed specialist list for THIS repo (reviewers, craft

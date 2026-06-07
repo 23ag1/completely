@@ -247,6 +247,29 @@ else
   no "guard-write-zone --self-test"
 fi
 
+echo "== read_context wiring (3jh: plan-apply emits it, worker prompt injects it before UNDERSTAND) =="
+RC_D=$(mktemp -d /tmp/cmpl-rc-XXXXXX)
+if ( cd "$RC_D" && git init -q && git -c user.email=t@t -c user.name=t commit -qm i --allow-empty \
+       && bd init proj --stealth ) >/dev/null 2>&1; then
+  RC_PLAN='{"epic":"E","tasks":[{"key":"rc","title":"rc","acceptance":"a","design":"d","write_zone":["src/api.py"],"verify":"true","read_context":["src/schemas.py","src/db/models.py"]}]}'
+  ( cd "$RC_D" && printf '%s' "$RC_PLAN" | python3 "$ROOT/scripts/plan-apply.py" >/dev/null 2>&1 )
+  RC_ID=$( cd "$RC_D" && bd list --json 2>/dev/null | python3 -c 'import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[])
+print(next((i["id"] for i in d if i.get("title")=="rc"), ""))' )
+  RC_MD=$( cd "$RC_D" && bd show "$RC_ID" --json 2>/dev/null | python3 -c 'import json,sys
+d=json.load(sys.stdin); d=d[0] if isinstance(d,list) else d
+print(",".join((d.get("metadata") or {}).get("read_context") or []))' )
+  if [ "$RC_MD" = "src/schemas.py,src/db/models.py" ]; then ok "plan-apply round-trips metadata.read_context from a plan"; else no "read_context round-trip (got: '$RC_MD')"; fi
+  RC_PROMPT=$( cd "$RC_D" && CMP_RUN_PROMPT=/dev/null bash "$ROOT/scripts/run.sh" --show-prompt "$RC_ID" 2>/dev/null )
+  if printf '%s' "$RC_PROMPT" | grep -q 'READ these first' && printf '%s' "$RC_PROMPT" | grep -q 'src/schemas.py'; then
+    ok "worker prompt injects read_context (read-before-UNDERSTAND)"
+  else
+    no "worker prompt missing read_context injection"
+  fi
+else
+  skip "read_context wiring (bd repo setup failed in tmp)"
+fi
+
 echo "== run parallel spawn loop (real dispatch+reap, mock worker — no LLM) =="
 # Integration test: the dispatcher UNIT (self-test) passed while the BASH spawn/reap loop that
 # consumes its output crashed at runtime ("invalid variable name" iterating the PID maps). This

@@ -13,7 +13,7 @@ JSON schema:
     {"key":"schema","title":"...","acceptance":"...","design":"...",
      "write_zone":["db/x.py"],"verify":"pytest -q","deps":["otherkey"],"labels":["backend"],
      "requirements":["R-01"],"must_haves":{"truths":[],"artifacts":[],"key_links":[]},
-     "read_first":["src/x.py"]}, ...
+     "read_context":["src/x.py"]}, ...
   ],
   "checkpoints": [
     {"key":"verify","title":"Human-verify X","after":"endpoint","how":"open /login"}
@@ -156,8 +156,11 @@ def main():
             md["requirements"] = t["requirements"]
         if t.get("must_haves"):
             md["must_haves"] = t["must_haves"]
-        if t.get("read_first"):
-            md["read_first"] = t["read_first"]
+        # read_context = what to READ first to understand the task (interfaces/contracts outside the
+        # write_zone). Canonical key is read_context; read_first is accepted as a back-compat alias.
+        rc = t.get("read_context") or t.get("read_first")
+        if rc:
+            md["read_context"] = rc
         nid, st = upsert(
             "plan:%s#%s" % (es, key),
             t.get("title", key),

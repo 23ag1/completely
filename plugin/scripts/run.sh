@@ -204,11 +204,30 @@ real-path command + its output on the bead in STEP 9 (LAND). A proxy-only claim 
 build_worker_prompt() {
   # $1 = task_id
   local tid="$1"
+  # 3jh: read-context — what to READ first to understand the task (write_zone is where to WRITE).
+  # A fresh `claude -p` has cleared context; without this it guesses which interfaces/contracts to
+  # read. Pulled from the bead's metadata.read_context (back-compat: read_first). Read-only — keeps
+  # build_worker_prompt a pure function (safe for --show-prompt / --self-test).
+  local rc
+  rc="$(bd show "$tid" --json 2>/dev/null | python3 -c '
+import sys,json
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+if isinstance(d,list): d=d[0] if d else {}
+elif isinstance(d,dict): d=d.get("issue") or d
+m=(d or {}).get("metadata") or {}
+rc=m.get("read_context") or m.get("read_first") or []
+if isinstance(rc,list): print("\n".join("  "+str(x) for x in rc if str(x).strip()))
+' 2>/dev/null)"
   printf '<<COMPLETELY_DISPATCH>>\n'
   printf 'Your assigned task: %s\n' "$tid"
   printf 'The parent has ALREADY claimed it for you (bd update %s --claim).\n' "$tid"
   printf 'Skip the selection part of step 0 — read THIS task directly:\n'
   printf '  bd show %s\n' "$tid"
+  if [ -n "$rc" ]; then
+    printf 'Before STEP 1 (UNDERSTAND), READ these first — the task read-context (interfaces/\n'
+    printf 'contracts you must NOT guess; they sit outside your write-zone):\n%s\n' "$rc"
+  fi
   printf 'Then proceed step 1 (UNDERSTAND) onward. Stay inside its write-zone.\n'
   printf 'If you cannot proceed: bd update %s --status blocked + a comment with the reason.\n' "$tid"
   printf '<<END_DISPATCH>>\n\n'
