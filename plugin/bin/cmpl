@@ -12,6 +12,8 @@ case "$cmd" in
   auto)    exec bash "$S/run.sh" --mode unattended "$@" ;;   # AUTONOMOUS (fresh -p per task)
   control) exec bash "$S/run.sh" --mode supervised "$@" ;;   # UNDER CONTROL (human-gated)
   run)     exec bash "$S/run.sh" "$@" ;;                      # generic (auto/control are aliases)
+  orphans) # list claims stranded by a dead/interrupted run; `cmpl orphans --reap` reopens them
+    if [ "${1:-}" = "--reap" ]; then exec bash "$S/run.sh" --reap-orphans; else exec bash "$S/run.sh" --orphans; fi ;;
   # quality
   check)   exec bash "$S/check.sh" "$@" ;;
   lint)    exec bash "$S/lint.sh" "$@" ;;
@@ -38,6 +40,7 @@ completely — quality-first agent harness.  Short CLI: cmpl
     cmpl auto              run AUTONOMOUSLY (fresh claude -p per task, stops when queue empty)
     cmpl control           run UNDER CONTROL (supervised, human gates / checkpoints)
     cmpl run [--mode ...]  generic driver (auto/control are the simple aliases)
+    cmpl orphans [--reap]  list (or --reap=reopen) claims a dead/interrupted run left in_progress
 
   QUALITY
     cmpl check [dir]       run all checks in one pass; "clean" or only the failure
