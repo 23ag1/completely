@@ -30,6 +30,33 @@ fi
 # Only gate task-closing commands; everything else passes through.
 printf '%s' "$CMD" | grep -qiE 'bd[[:space:]]+close([[:space:]]|$)|--status[[:space:]=]+closed' || exit 0
 
+# b3y: refuse close while the bead carries unresolved CRITICAL/HIGH reviewer findings. The worker /
+# reviewer records each as metadata.open_findings; addressing it means fixing + clearing the entry,
+# or `bd update --status blocked` quoting it — never paraphrasing a verdict as addressed without the
+# change. This makes "findings are binding" a deterministic gate, not prose. Override: CMP_ALLOW_OPEN_FINDINGS=1.
+if [ "${CMP_ALLOW_OPEN_FINDINGS:-0}" != 1 ] && command -v bd >/dev/null 2>&1; then
+  CID="$(printf '%s' "$CMD" | sed -n 's/.*bd[[:space:]]\+close[[:space:]]\+\([A-Za-z0-9._-]\+\).*/\1/p' | head -1)"
+  [ -z "$CID" ] && CID="$(printf '%s' "$CMD" | sed -n 's/.*bd[[:space:]]\+update[[:space:]]\+\([A-Za-z0-9._-]\+\).*/\1/p' | head -1)"
+  if [ -n "$CID" ]; then
+    OF="$(bd show "$CID" --json 2>/dev/null | python3 -c '
+import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d={}
+if isinstance(d,list): d=d[0] if d else {}
+elif isinstance(d,dict): d=d.get("issue") or d
+of=((d or {}).get("metadata") or {}).get("open_findings") or []
+print(len(of) if isinstance(of,list) else (1 if of else 0))' 2>/dev/null)"
+    if [ -n "$OF" ] && [ "$OF" -gt 0 ] 2>/dev/null; then
+      {
+        echo "[harness/guard] BLOCKED bd close — ${CID} has ${OF} unresolved reviewer finding(s) (metadata.open_findings)."
+        echo "[harness/guard] address each CRITICAL/HIGH finding (fix + clear open_findings), or bd update --status blocked quoting it."
+        echo "[harness/guard] never restate a finding as addressed without the change. override (rare): CMP_ALLOW_OPEN_FINDINGS=1"
+      } >&2
+      exit 2
+    fi
+  fi
+fi
+
 [ "${CMP_ALLOW_DIRTY_CLOSE:-0}" = 1 ] && exit 0
 
 PROJ="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"

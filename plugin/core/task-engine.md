@@ -108,6 +108,11 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
    verdicts; (b) `git add` the write-zone and `git commit -m "... (<id>)"`, and CONFIRM it landed
    (if the commit is blocked by a shared-tree gate, fix it or return blocked — do NOT close);
    (c) ONLY after the commit landed AND the evaluator ACCEPTED → `bd close <id>`.
+   **Reviewer findings are binding (deterministic gate).** Each CRITICAL/HIGH finding from either
+   reviewer maps to a concrete fix referenced in (a), OR is recorded in `metadata.open_findings` and
+   the bead set blocked — never paraphrased away. The `guard-close` hook REFUSES `bd close` while
+   `metadata.open_findings` is non-empty (same shape as commit-before-close; override
+   `CMP_ALLOW_OPEN_FINDINGS=1`).
 
 10. **STOP-conditions** (spec ambiguity / scope beyond write-zone / cannot build full version /
     security finding / repeated failure / architecture fork) → `bd update <id> --status blocked` +

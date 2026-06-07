@@ -198,6 +198,10 @@ project-level findings, treated as BLOCKING:
 A clear project-level problem is a stop-condition even with a green suite: fix it in this task, or
 `bd update --status blocked` with the finding quoted. A passing test over a project-wide problem is
 NOT a pass.
+Reviewer findings are BINDING (both code-reviewer and security-reviewer): every CRITICAL/HIGH
+finding maps to a concrete fix referenced in your STEP 9 (LAND) comment, OR you record it in
+`metadata.open_findings` and set the bead blocked. NEVER restate a verdict as "addressed" without the
+corresponding change. The close gate REFUSES a bead whose `metadata.open_findings` is non-empty.
 <<END_ENFORCED>>'
 
 ENFORCED_VERIFY='<<COMPLETELY_ENFORCED step=verify policy=path-exercised>>

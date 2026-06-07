@@ -258,6 +258,23 @@ else
   no "cmpl run dispatcher self-test"
 fi
 
+echo "== reviewer findings binding (b3y: guard-close refuses close while open_findings non-empty) =="
+BY_D=$(mktemp -d /tmp/cmpl-b3y-XXXXXX)
+if ( cd "$BY_D" && git init -q && git -c user.email=t@t -c user.name=t commit -qm i --allow-empty \
+       && bd init proj --stealth ) >/dev/null 2>&1; then
+  ( cd "$BY_D"
+    bd create "has-finding" -t task --acceptance a --design d --metadata '{"write_zone":["x"],"verify":"x","open_findings":["HIGH: x"]}' >/dev/null 2>&1
+    bd create "clean" -t task --acceptance a --design d --metadata '{"write_zone":["y"],"verify":"x"}' >/dev/null 2>&1 )
+  BY_F=$( cd "$BY_D" && bd list --json | python3 -c 'import json,sys;d=json.load(sys.stdin);print([i["id"] for i in d if i["title"]=="has-finding"][0])' )
+  BY_C=$( cd "$BY_D" && bd list --json | python3 -c 'import json,sys;d=json.load(sys.stdin);print([i["id"] for i in d if i["title"]=="clean"][0])' )
+  ( cd "$BY_D" && printf '{"tool_input":{"command":"bd close %s"}}' "$BY_F" | CMP_ALLOW_DIRTY_CLOSE=1 bash "$ROOT/hooks/guard-close.sh" >/dev/null 2>&1 ); rcf=$?
+  ( cd "$BY_D" && printf '{"tool_input":{"command":"bd close %s"}}' "$BY_C" | CMP_ALLOW_DIRTY_CLOSE=1 bash "$ROOT/hooks/guard-close.sh" >/dev/null 2>&1 ); rcc=$?
+  if [ "$rcf" = 2 ]; then ok "guard-close refuses close with an open CRITICAL/HIGH finding (exit 2)"; else no "b3y: open finding not gated (rc=$rcf)"; fi
+  if [ "$rcc" = 0 ]; then ok "guard-close allows close with no open findings (exit 0)"; else no "b3y: clean bead blocked (rc=$rcc)"; fi
+else
+  skip "reviewer findings binding (bd repo setup failed in tmp)"
+fi
+
 echo "== guard-write-zone (edit-time write_zone fence, PreToolUse) =="
 if bash "$ROOT/hooks/guard-write-zone.sh" --self-test >/dev/null 2>&1; then
   ok "guard-write-zone: denies edits outside zone, allows inside, interactive no-op"
