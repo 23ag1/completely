@@ -240,6 +240,13 @@ else
   no "cmpl run dispatcher self-test"
 fi
 
+echo "== guard-write-zone (edit-time write_zone fence, PreToolUse) =="
+if bash "$ROOT/hooks/guard-write-zone.sh" --self-test >/dev/null 2>&1; then
+  ok "guard-write-zone: denies edits outside zone, allows inside, interactive no-op"
+else
+  no "guard-write-zone --self-test"
+fi
+
 echo "== run parallel spawn loop (real dispatch+reap, mock worker — no LLM) =="
 # Integration test: the dispatcher UNIT (self-test) passed while the BASH spawn/reap loop that
 # consumes its output crashed at runtime ("invalid variable name" iterating the PID maps). This

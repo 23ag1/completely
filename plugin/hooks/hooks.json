@@ -1,5 +1,5 @@
 {
-  "description": "claude-harness deterministic gates: quality-gate after edits, dangerous-command + commit-before-close guards before Bash, opt-in cost-tracker on every tool call.",
+  "description": "claude-harness deterministic gates: quality-gate after edits, dangerous-command + commit-before-close guards before Bash, write_zone fence before Write/Edit/NotebookEdit, opt-in cost-tracker on every tool call.",
   "hooks": {
     "Setup": [
       {
@@ -47,6 +47,16 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-close.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard-write-zone.sh\"",
             "timeout": 10
           }
         ]
