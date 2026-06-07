@@ -25,6 +25,13 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
 2. **PLAN-CHECK the task (goal-backward, gsd-plan-checker's dimensions).** Is acceptance
    user-observable? write-zone correct? deps satisfied? artifacts wired (not created in isolation)?
    scope within context budget? If too big/ambiguous → split with `cmpl plan-apply`, or `blocked`.
+   **Query prior decisions FIRST.** Before choosing a lib / pattern / contract, run
+   `bd query "type=decision"` (and a topic-scoped variant, e.g.
+   `bd query 'type=decision AND title=auth'`) — a sibling or earlier task may have already locked
+   that choice as an ADR. Inherit it; if you must contradict it, record a superseding ADR
+   (`bd create --type=decision --title "..." --description "context · choice · consequences"` and
+   `bd supersede <new> <old>`), don't silently diverge. This is the cross-task analogue to
+   `bd comment` (task-bound) — see `core/memory-policy.md` (Cross-task architecture decision).
    The **planning thinking-models** (Pre-Mortem, MECE-Decomposition, Constraint-Analysis,
    Reversibility-Test) are **ENFORCED**, not referenced: `cmpl run` injects a
    `<<COMPLETELY_ENFORCED step=plan-check policy=thinking-models-planning>>` block into the worker's

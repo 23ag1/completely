@@ -11,6 +11,9 @@ Beads is the single source of truth — never track work in markdown.
    gsd-phase-researcher (+ Context7). Don't guess.
 2. PLAN-CHECK (goal-backward): acceptance user-observable? deps ok? artifacts wired? scope sane?
    Too big/ambiguous → split via `cmpl plan-apply` or return blocked.
+   **Query prior decisions FIRST** — run `bd query "type=decision"` (and a topic-scoped variant)
+   before picking a lib/pattern/contract; inherit any matching ADR, or record a superseding one
+   with `bd create --type=decision ... && bd supersede <new> <old>`. Don't silently diverge.
 3. DECOMPOSE: independent sub-streams with disjoint write-zones → spawn subagents in PARALLEL
    (one write-zone each); serialize conflicting writes with `bd merge-slot`. Else sequential.
 4. BUILD: tdd (failing test → minimal code → refactor; never disable a test). Frontend →
