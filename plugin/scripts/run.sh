@@ -362,6 +362,14 @@ RUN_ID="run-$$-$(NOW)"
 HEARTBEAT_EVERY="${CMP_HEARTBEAT_EVERY:-60}"    # throttle: bump a live worker's heartbeat at most this often
 HEARTBEAT_STALE="${CMP_HEARTBEAT_STALE:-300}"   # a claim whose heartbeat is older than this is an orphan
 
+# b8n: integration gate. Each worker self-verifies its OWN task; nobody checks the UNION composes.
+# After a batch of >= INTEGRATION_MIN landed tasks settles, run ONE union gate; a non-composing
+# union files a blocked integration bead (never a silent "done").
+INTEGRATION_MIN="${CMP_INTEGRATION_MIN:-2}"
+INTEGRATION_CMD="${CMP_INTEGRATION_CMD:-bash $ROOT/scripts/check.sh}"
+BATCH_CLOSED=0
+INTEGRATION_FAILED=0
+
 # --- stall detection (kpt) ----------------------------------------------------------------------
 # Single source of truth for "is the loop wedged?", used by the saturated-wait poller AND the
 # per-iteration check (was duplicated wall-clock arithmetic in two places). Two corrections over the
@@ -478,6 +486,37 @@ elif mode=="reap": print(f"  reaped {n} orphan(s) -> reopened")
 ' "$mode" "$now" "$HEARTBEAT_STALE"
 }
 
+# ---------- b8n: integration gate over the union of a landed batch ----------
+# Each worker proved its OWN task green; this proves the disjoint pieces COMPOSE. On failure it does
+# NOT silently pass — it files a blocked integration bead naming the failure and signals an honest stop.
+_integration_gate() {
+  local cmd="$INTEGRATION_CMD" out rc
+  echo "run: integration gate — verifying the union of ${BATCH_CLOSED} landed task(s) composes (${cmd})"
+  out="$(eval "$cmd" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "run: integration gate PASS — union composes."
+    return 0
+  fi
+  echo "run: INTEGRATION GATE FAILED — the batch's disjoint pieces do not compose."
+  local nid
+  nid="$(bd create "integration: union of landed batch does not compose" -t bug -p 0 \
+      --design "After ${BATCH_CLOSED} task(s) landed in one run, the integration gate failed: each disjoint write_zone passed its OWN gate but the UNION does not. Gate: ${cmd}
+--- tail ---
+$(printf '%s' "$out" | tail -15)" 2>&1 | sed -n 's/.*Created issue: \([^ ]*\).*/\1/p' | head -1)"
+  [ -n "$nid" ] && bd update "$nid" --status blocked >/dev/null 2>&1
+  echo "run: filed BLOCKED integration bead: ${nid:-<bd create failed>} (inspect: bd show ${nid})"
+  INTEGRATION_FAILED=1
+  return 1
+}
+# Run the gate at most once per settled batch of >= INTEGRATION_MIN closes; reset the counter after.
+_maybe_integration_gate() {
+  [ "$DRY" = 1 ] && return 0
+  [ "${BATCH_CLOSED:-0}" -ge "$INTEGRATION_MIN" ] || return 0
+  _integration_gate || { STOP_REASON="integration-failed"; return 1; }
+  BATCH_CLOSED=0
+  return 0
+}
+
 # Drop tracking for one PID + free its slot + clean log + mark progress made.
 _drop_pid() {
   local pid="$1"
@@ -548,6 +587,7 @@ reap_finished() {
   done
   local cc; cc="$(closed_count)"; cc="${cc:-0}"
   if [ "$cc" -gt "${prev_closed:-0}" ]; then
+    BATCH_CLOSED=$(( BATCH_CLOSED + cc - prev_closed ))   # b8n: closes since the last integration gate
     prev_closed="$cc"
     LAST_PROGRESS_TS="$(NOW)"
   fi
@@ -601,12 +641,13 @@ print(len(d if isinstance(d,list) else d.get("issues",[])))' 2>/dev/null)"
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 && dirty_n=$(git status --porcelain 2>/dev/null | wc -l)
   echo ""
   echo "================= run-report ================="
-  if [ "${inprog:-0}" -eq 0 ] && [ "${dirty_n:-0}" -eq 0 ]; then
-    echo "  STATUS: DONE — ready queue empty, no in_progress orphans, clean tree"
+  if [ "${inprog:-0}" -eq 0 ] && [ "${dirty_n:-0}" -eq 0 ] && [ "${INTEGRATION_FAILED:-0}" -eq 0 ]; then
+    echo "  STATUS: DONE — ready queue empty, no in_progress orphans, clean tree, union composes"
   else
     echo "  STATUS: STOPPED — INCOMPLETE (do NOT assume done)"
     [ "${inprog:-0}" -gt 0 ] && echo "    · ${inprog} in_progress ORPHAN(s): ${inprog_ids}   (reset: bd update <id> --status open)"
     [ "${dirty_n:-0}" -gt 0 ] && echo "    · ${dirty_n} uncommitted tree file(s) — commit or revert"
+    [ "${INTEGRATION_FAILED:-0}" -ne 0 ] && echo "    · INTEGRATION gate FAILED — union does not compose; see the blocked 'integration:' bead"
   fi
   echo "  closed this run: ${closed_now}    blocked: ${blocked_n}    stop reason: ${reason}"
   echo "  spend: ${RUN_SPEND:-n/a (track via CMP_BENCH_LOG or claude -p --output-format json)}"
@@ -634,6 +675,11 @@ fi
 while true; do
   # Reap any finished/settled workers (non-blocking) so freed slots get refilled on this tick.
   reap_finished || true
+
+  # b8n: when a batch has fully settled (no workers in flight), gate the UNION of what just landed.
+  if [ "$NRUN" -eq 0 ]; then
+    _maybe_integration_gate || break
+  fi
 
   n="$(ready_count)"; n="${n:-0}"
   if [ "$n" -le 0 ] && [ "$NRUN" -eq 0 ]; then

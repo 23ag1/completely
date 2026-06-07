@@ -297,4 +297,45 @@ MOCK
     echo "  SKIP cva reaper (bd not installed)"
   fi
 
+  # Case 13 (b8n): after a batch of >=2 landed tasks, the integration gate runs over the UNION; a
+  # non-composing union (CMP_INTEGRATION_CMD=false) files a BLOCKED integration bead, never a silent pass.
+  if command -v bd >/dev/null 2>&1; then
+    BD=$(mktemp -d /tmp/cmpl-b8n-XXXXXX); BMOCK=$(mktemp /tmp/cmpl-b8n-mock-XXXXXX.sh)
+    cat > "$BMOCK" <<'MOCK'
+#!/usr/bin/env bash
+set -uo pipefail
+in="$(cat)"; id="$(printf '%s' "$in" | sed -n 's/^Your assigned task: //p' | head -1)"
+[ -n "$id" ] || exit 0
+bd close "$id" >/dev/null 2>&1
+MOCK
+    chmod +x "$BMOCK"
+    if ( cd "$BD" && git init -q && git -c user.email=t@t -c user.name=t commit -qm i --allow-empty \
+           && bd init proj --stealth ) >/dev/null 2>&1; then
+      ( cd "$BD"
+        bd create "u-a" -t task --acceptance a --design d --metadata '{"write_zone":["a"],"verify":"true"}' >/dev/null 2>&1
+        bd create "u-b" -t task --acceptance a --design d --metadata '{"write_zone":["b"],"verify":"true"}' >/dev/null 2>&1 )
+      BD_OUT="$( cd "$BD" && CMP_CLAUDE_CMD="bash $BMOCK" CMP_PARALLEL=2 CMP_RUN_PROMPT="$PROMPT" \
+          CMP_INTEGRATION_CMD=false CMP_INTEGRATION_MIN=2 CMP_STALL_SECS=60 \
+          timeout 40 bash "$SELF_ABS" --mode unattended 2>&1 )"
+      BD_BLK=$( cd "$BD" && bd list --status blocked --json 2>/dev/null | python3 -c '
+import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+d=d if isinstance(d,list) else d.get("issues",[])
+print("YES" if any("integration" in (i.get("title") or "") for i in d) else "NO")' )
+      if printf '%s' "$BD_OUT" | grep -q 'INTEGRATION GATE FAILED' && [ "$BD_BLK" = "YES" ] \
+         && printf '%s' "$BD_OUT" | grep -q 'STOPPED — INCOMPLETE'; then
+        echo "  PASS integration gate catches a non-composing union -> blocked bead + STOPPED (not silent pass)"
+      else
+        echo "  FAIL b8n: union-fail not caught/blocked (blocked=$BD_BLK)"
+        printf '%s\n' "$BD_OUT" | tail -12 | sed 's/^/      | /'; fail=1
+      fi
+    else
+      echo "  SKIP b8n integration gate (bd repo setup failed in tmp)"
+    fi
+    rm -rf "$BD" "$BMOCK" 2>/dev/null || true
+  else
+    echo "  SKIP b8n integration gate (bd not installed)"
+  fi
+
   if [ "$fail" = 0 ]; then echo "run/self-test: OK"; exit 0; else echo "run/self-test: FAILED"; exit 1; fi

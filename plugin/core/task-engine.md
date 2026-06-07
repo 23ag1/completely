@@ -131,6 +131,13 @@ Merge-slot is still the safety net at COMMIT time for rare cross-zone file colli
 whose declared zones don't overlap but happen to both touch a file at land time); the dispatcher
 covers the common case at SPAWN time.
 
+**Integration gate (the union must compose).** Each worker proves its OWN task green, but disjoint
+pieces that each pass in isolation can still fail to compose. After a batch of ≥ `CMP_INTEGRATION_MIN`
+(default 2) tasks settles, `cmpl run` runs ONE integration gate over the union (`CMP_INTEGRATION_CMD`,
+default `cmpl check`). A non-composing union is never a silent pass: it files a **blocked**
+`integration:` bead naming the failure and the run-report reports STOPPED (not DONE). This is the
+cross-task analogue of the per-task gate — green parts, green whole.
+
 ## Run-report — the loop never lies about "done" (`cmpl run`)
 
 On EVERY exit (queue drained / wall-clock stall / `--max`) the loop prints a **run-report** with an
