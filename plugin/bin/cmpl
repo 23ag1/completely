@@ -25,6 +25,7 @@ case "$cmd" in
   # setup & maintenance
   setup)   exec bash "$S/bootstrap.sh" "$@" ;;
   doctor)  exec bash "$S/doctor.sh" "$@" ;;
+  status)  exec bash "$S/status.sh" "$@" ;;       # read-only loop-health snapshot (anytime)
   update)  exec bash "$S/update.sh" "$@" ;;
   # migration (legacy markdown -> Beads, one-time)
   sync)    exec bash "$S/sync.sh" "$@" ;;
@@ -41,6 +42,7 @@ completely — quality-first agent harness.  Short CLI: cmpl
     cmpl control           run UNDER CONTROL (supervised, human gates / checkpoints)
     cmpl run [--mode ...]  generic driver (auto/control are the simple aliases)
     cmpl orphans [--reap]  list (or --reap=reopen) claims a dead/interrupted run left in_progress
+    cmpl status            read-only loop-health snapshot: alive? counts, orphans, dirty, verdict
 
   QUALITY
     cmpl check [dir]       run all checks in one pass; "clean" or only the failure

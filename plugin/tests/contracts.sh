@@ -270,6 +270,30 @@ else
   skip "read_context wiring (bd repo setup failed in tmp)"
 fi
 
+echo "== cmpl status (prs: read-only loop-health rollup) =="
+PS_D=$(mktemp -d /tmp/cmpl-prs-XXXXXX)
+if ( cd "$PS_D" && git init -q && git -c user.email=t@t -c user.name=t commit -qm i --allow-empty \
+       && bd init proj --stealth ) >/dev/null 2>&1; then
+  ( cd "$PS_D"
+    bd create "orphan-me" -t task --acceptance a --design d --metadata '{"write_zone":["a"],"verify":"x"}' >/dev/null 2>&1
+    PSID=$(bd list --json | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d[0]["id"])')
+    bd update "$PSID" --status in_progress >/dev/null 2>&1
+    bd update "$PSID" --metadata '{"write_zone":["a"],"verify":"x","worker_id":"run-dead/pid9","heartbeat":1}' >/dev/null 2>&1
+    echo dirty > wip.txt )
+  PS_OUT=$( cd "$PS_D" && CMP_HEARTBEAT_STALE=300 bash "$ROOT/scripts/status.sh" 2>/dev/null )
+  PS_AFTER=$( cd "$PS_D" && bd list --status in_progress --json 2>/dev/null | python3 -c 'import json,sys
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("issues",[]); print(len(d))' )
+  if printf '%s' "$PS_OUT" | grep -q 'INCOMPLETE' && printf '%s' "$PS_OUT" | grep -q 'stale claim' \
+     && printf '%s' "$PS_OUT" | grep -q 'uncommitted file'; then
+    ok "cmpl status reports injected orphan + dirty tree -> INCOMPLETE"
+  else
+    no "cmpl status rollup (missing orphan/dirty/INCOMPLETE)"
+  fi
+  if [ "$PS_AFTER" = "1" ]; then ok "cmpl status is read-only (orphan left in_progress, not reaped)"; else no "cmpl status mutated state (in_progress=$PS_AFTER)"; fi
+else
+  skip "cmpl status rollup (bd repo setup failed in tmp)"
+fi
+
 echo "== run parallel spawn loop (real dispatch+reap, mock worker — no LLM) =="
 # Integration test: the dispatcher UNIT (self-test) passed while the BASH spawn/reap loop that
 # consumes its output crashed at runtime ("invalid variable name" iterating the PID maps). This
