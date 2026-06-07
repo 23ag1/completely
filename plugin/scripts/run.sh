@@ -212,6 +212,10 @@ can stay green while the production code path never runs. For each behavioral ac
     vacuous.
 For orchestration/shell, drive the real loop with a mock backend (CMP_CLAUDE_CMD=true). Post the
 real-path command + its output on the bead in STEP 9 (LAND). A proxy-only claim is a stop-condition.
+ALSO judge USER-PERCEIVED correctness: EXERCISE the artifact as a user would and OBSERVE the result,
+do not infer it from the tests — CLI: run the command + read output; server: hit the endpoint;
+frontend: wire /run + /verify and screenshot (Playwright). No run / no observed behavior == FAIL
+(an assumed pass is not a pass); green internals over a janky lived result is a stop-condition.
 <<END_ENFORCED>>'
 
 # Build the exact stdin a worker will receive for a given task. Pure function — no Beads writes,

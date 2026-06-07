@@ -91,6 +91,14 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
    backend (`CMP_CLAUDE_CMD=true`) so the spawn/reap path actually runs — a unit + dry-run skip it —
    and add a negative control that goes RED when the impl is broken. See `plugin/agents/evaluator.md`
    (Path-Exercised) and `plugin/tests/fixtures/path-exercised/`.
+   **User-Perceived Correctness (enforced).** Path-Exercised proves the code path *ran*; this proves
+   the lived **experience** is sound — every gate above measures the WRITTEN contract, none observe
+   what a human actually gets (how a task ships tests-green yet janky). Before the verdict, EXERCISE
+   the artifact as a user would and OBSERVE: CLI → run the command + read output; server → hit the
+   endpoint; frontend → wire `/run` + `/verify` and **screenshot** (Playwright). **No run / no
+   observed behavior == FAIL**, never an assumed pass; vague (non-exercisable) acceptance is itself
+   flagged. `cmpl run` injects this into the `step=verify` enforced block at spawn. See
+   `plugin/agents/evaluator.md` (User-Perceived Correctness).
 
 8. **DEBUG on failure.** Tests/checks fail repeatedly (≥3)? Spawn **gsd-debugger** (scientific
    method, persistent session) — don't thrash, don't disable the test.

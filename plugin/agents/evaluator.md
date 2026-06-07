@@ -68,6 +68,30 @@ For EACH behavioral acceptance criterion, before flipping it PASS:
 backend (`CMP_CLAUDE_CMD=true`) and assert it neither crashes nor no-ops — that exercises the
 spawn/reap path a unit + dry-run skip entirely.
 
+## User-Perceived Correctness — was it exercised AS A USER would? (STANDARD step)
+
+Path-Exercised proves the production code path *ran*. This proves the lived **experience** is sound —
+every other gate (`cmpl check`, lint, the reviewers, the verifier) measures whether the code
+satisfies the WRITTEN contract; **none observe what a human actually gets.** That blind spot is how a
+task ships *tests-green + code-present + bead-closed* yet obviously janky to anyone who runs it.
+
+For each user-facing acceptance criterion, before flipping it PASS:
+1. **Exercise the artifact the way a user would, and OBSERVE the result** — do not infer it from the
+   tests:
+   - **CLI/script** → run the actual command and read its real output (exit code, text, side effect);
+   - **server/API** → hit the endpoint (curl / a request) and read the status + body;
+   - **frontend** → wire `/run` + `/verify` (or the project's run skill) and **screenshot via
+     Playwright**; read the rendered result, not the component test.
+2. **No run, no observed behavior → FAIL** (an *assumed* pass is not a pass). If you could not
+   exercise it, the criterion stays FAIL and you say why — never round up to "probably works".
+3. **Judge the experience, not just the absence of errors:** does the output/behaviour actually do
+   what a user asked, legibly (no obvious jank, broken layout, garbled output, silent no-op)?
+4. **Flag vague acceptance** as a contributing cause: a criterion too fuzzy to *exercise* (no
+   observable user behavior named) is itself a defect — call it out so the contract gets sharpened.
+
+This is **default-FAIL on experiential sanity**: green internals over a janky lived result is a
+REJECT, not an ACCEPT.
+
 ## Generic Definition of Done (used if no project DoD)
 - All acceptance criteria met IN FULL (not downscoped).
 - Tests exist, **run the real runtime path** (a negative control on that path goes RED), cover the

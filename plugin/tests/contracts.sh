@@ -233,6 +233,24 @@ GI=$( cd "$D" && GIT_CONFIG_GLOBAL=/dev/null git config user.email 2>/dev/null )
 [ -n "$GI" ] && ok "run.sh ensures a git identity before the loop ($GI)" || no "run.sh land-guard (no identity set)"
 rm -rf "$D"
 
+echo "== user-perceived correctness (hll: evaluator exercises as a user, no-run==FAIL) =="
+if grep -qi 'user-perceived' "$ROOT/agents/evaluator.md" \
+   && grep -qiE 'No run.*== *FAIL|no observed behavior' "$ROOT/agents/evaluator.md"; then
+  ok "evaluator.md has the User-Perceived dimension (no run / no observed behavior == FAIL)"
+else
+  no "evaluator.md missing user-perceived dimension / no-run-FAIL rule"
+fi
+if grep -qi 'user-perceived' "$ROOT/core/task-engine.md"; then
+  ok "task-engine VERIFY step wires user-perceived correctness"
+else
+  no "task-engine VERIFY missing user-perceived wiring"
+fi
+if CMP_RUN_PROMPT=/dev/null bash "$ROOT/scripts/run.sh" --show-prompt DEMO 2>/dev/null | grep -qi 'USER-PERCEIVED correctness'; then
+  ok "worker prompt injects user-perceived requirement at step=verify (enforced, not doc-only)"
+else
+  no "user-perceived not injected into worker prompt"
+fi
+
 echo "== run dispatcher (parallel disjoint / serial same-zone) =="
 if bash "$ROOT/scripts/run.sh" --self-test >/dev/null 2>&1; then
   ok "cmpl run dispatcher: disjoint tasks parallel, same write_zone serializes"

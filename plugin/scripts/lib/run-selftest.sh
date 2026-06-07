@@ -98,6 +98,7 @@
     'policy=path-exercised' \
     'real runtime path' \
     'negative control' \
+    'USER-PERCEIVED correctness' \
     '<<END_ENFORCED>>' \
     '<<COMPLETELY_DISPATCH>>' \
     'Your assigned task: T1'; do
