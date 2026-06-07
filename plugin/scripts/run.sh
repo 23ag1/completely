@@ -392,7 +392,7 @@ print("BLOCKED" if any(i.get("title") == "linger" for i in d) else "OPEN")' )
         echo "  FAIL linger-detection: reap message never appeared (worker was not reclaimed)"
         echo "$LD_OUT" | tail -10 | sed 's/^/      | /'
         fail=1
-      elif ! printf '%s' "$LD_OUT" | grep -q 'done after'; then
+      elif ! printf '%s' "$LD_OUT" | grep -q 'ready queue drained'; then
         echo "  FAIL linger-detection: loop did not announce clean termination"
         echo "$LD_OUT" | tail -10 | sed 's/^/      | /'
         fail=1
@@ -408,6 +408,33 @@ print("BLOCKED" if any(i.get("title") == "linger" for i in d) else "OPEN")' )
     rm -rf "$LD" "$LMOCK" 2>/dev/null || true
   else
     echo "  SKIP lingering-blocked worker (bd not installed)"
+  fi
+
+  # Case 10 (ovi): a mid-run worker DEATH — parent claims, worker process dies WITHOUT closing —
+  # must surface in the run-report as an in_progress ORPHAN + STATUS: STOPPED — INCOMPLETE, never a
+  # bare "done". Real loop; mock worker = `false` (ignores stdin, exits non-zero = "died").
+  if command -v bd >/dev/null 2>&1; then
+    RR=$(mktemp -d /tmp/cmpl-rep-st.XXXXXX)
+    if ( cd "$RR" && git init -q && git -c user.email=t@t -c user.name=t commit -qm i --allow-empty \
+           && bd init proj --stealth ) >/dev/null 2>&1; then
+      ( cd "$RR" && bd create "orphan-me" -t task --acceptance a --design d \
+          --metadata '{"write_zone":["a"],"verify":"x"}' >/dev/null 2>&1 )
+      RR_OUT="$( cd "$RR" && CMP_CLAUDE_CMD='false' CMP_STALL_SECS=25 CMP_WORKER_TIMEOUT=20 \
+          timeout 40 bash "$SELF_ABS" --mode unattended 2>&1 )"
+      if printf '%s' "$RR_OUT" | grep -q 'STOPPED — INCOMPLETE' \
+         && printf '%s' "$RR_OUT" | grep -q 'in_progress ORPHAN'; then
+        echo "  PASS run-report flags mid-run worker death (orphan + STOPPED — INCOMPLETE)"
+      else
+        echo "  FAIL run-report: mid-run death not flagged as orphan/incomplete"
+        printf '%s\n' "$RR_OUT" | tail -8 | sed 's/^/      | /'
+        fail=1
+      fi
+    else
+      echo "  SKIP run-report orphan (bd repo setup failed in tmp)"
+    fi
+    rm -rf "$RR" 2>/dev/null || true
+  else
+    echo "  SKIP run-report orphan (bd not installed)"
   fi
 
   if [ "$fail" = 0 ]; then echo "run/self-test: OK"; exit 0; else echo "run/self-test: FAILED"; exit 1; fi
@@ -631,7 +658,7 @@ wait_for_slot() {
     reap_finished || true
     local now; now="$(NOW)"
     if [ "$((now - LAST_PROGRESS_TS))" -ge "$STALL_SECS" ]; then
-      echo "run: no progress for ${STALL_SECS}s while saturated — killing in-flight workers and stopping."
+      echo "run: no progress for ${STALL_SECS}s while saturated — killing in-flight workers and stopping."; STOP_REASON="stall"
       _kill_all_workers
       return 1
     fi
@@ -650,13 +677,48 @@ _kill_all_workers() {
   done
 }
 
+# ---------- run-report: honest exit summary. DONE only if queue empty + no orphans + clean tree ----
+# The loop must NEVER let a user assume "done" when in_progress orphans or a dirty tree remain
+# (the overnight-run scenario: it stopped, left mess, and a near-empty `bd ready` looked finished).
+run_report() {
+  [ "$DRY" = 1 ] && return 0
+  local reason="${1:-unknown}" closed_now blocked_n inprog inprog_ids dirty_n
+  closed_now=$(( $(closed_count) - ${START_CLOSED:-0} ))
+  inprog_ids="$(bd list --status in_progress --json 2>/dev/null | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+d=d if isinstance(d,list) else d.get("issues",[])
+print(" ".join(i["id"] for i in d if i.get("issue_type")!="epic"))' 2>/dev/null)"
+  inprog=$(printf '%s' "$inprog_ids" | wc -w)
+  blocked_n="$(bd list --status blocked --json 2>/dev/null | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+print(len(d if isinstance(d,list) else d.get("issues",[])))' 2>/dev/null)"
+  dirty_n=0
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 && dirty_n=$(git status --porcelain 2>/dev/null | wc -l)
+  echo ""
+  echo "================= run-report ================="
+  if [ "${inprog:-0}" -eq 0 ] && [ "${dirty_n:-0}" -eq 0 ]; then
+    echo "  STATUS: DONE — ready queue empty, no in_progress orphans, clean tree"
+  else
+    echo "  STATUS: STOPPED — INCOMPLETE (do NOT assume done)"
+    [ "${inprog:-0}" -gt 0 ] && echo "    · ${inprog} in_progress ORPHAN(s): ${inprog_ids}   (reset: bd update <id> --status open)"
+    [ "${dirty_n:-0}" -gt 0 ] && echo "    · ${dirty_n} uncommitted tree file(s) — commit or revert"
+  fi
+  echo "  closed this run: ${closed_now}    blocked: ${blocked_n}    stop reason: ${reason}"
+  echo "  spend: ${RUN_SPEND:-n/a (track via CMP_BENCH_LOG or claude -p --output-format json)}"
+  echo "=============================================="
+}
+
+STOP_REASON=""
+START_CLOSED="$(closed_count)"
 while true; do
   # Reap any finished/settled workers (non-blocking) so freed slots get refilled on this tick.
   reap_finished || true
 
   n="$(ready_count)"; n="${n:-0}"
   if [ "$n" -le 0 ] && [ "$NRUN" -eq 0 ]; then
-    echo "run: bd ready is empty — done after $i iteration(s)."; break
+    echo "run: ready queue drained after $i iteration(s)."; STOP_REASON="queue-empty"; break
   fi
 
   free=$(( PARALLEL - $NRUN ))
@@ -677,7 +739,7 @@ while true; do
       if ! wait_for_slot; then break; fi
       continue
     else
-      echo "run: bd ready is empty — done after $i iteration(s)."; break
+      echo "run: ready queue drained after $i iteration(s)."; STOP_REASON="queue-empty"; break
     fi
   fi
 
@@ -736,13 +798,15 @@ while true; do
     echo "run: no progress (no close/reap) for ${STALL_SECS}s — stopping; killing in-flight workers."
     echo "     inspect 'bd list --status in_progress' for abandoned claims (reset: bd update <id> --status open)."
     _kill_all_workers
-    break
+    STOP_REASON="stall"; break
   fi
   if [ "$MAX" -gt 0 ] && [ "$i" -ge "$MAX" ]; then
     echo "run: reached max $MAX iteration(s) — draining in-flight workers."
     while [ "$NRUN" -gt 0 ]; do
       if ! wait_for_slot; then break; fi
     done
-    break
+    STOP_REASON="max"; break
   fi
 done
+
+run_report "$STOP_REASON"

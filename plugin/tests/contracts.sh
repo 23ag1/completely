@@ -251,7 +251,7 @@ PD=$(mktmp)
 PDOUT=$( cd "$PD" && CMP_CLAUDE_CMD='true' CMP_PARALLEL=2 CMP_STALL=1 timeout 60 bash "$ROOT/scripts/run.sh" --mode unattended 2>&1 )
 if printf '%s' "$PDOUT" | grep -qiE 'invalid variable|: line [0-9]+:|syntax error'; then
   no "run parallel spawn loop crashes ($(printf '%s' "$PDOUT" | grep -iE 'invalid variable|line [0-9]' | head -1))"
-elif printf '%s' "$PDOUT" | grep -q 'done after'; then
+elif printf '%s' "$PDOUT" | grep -q 'ready queue drained'; then
   ok "run parallel spawn loop: disjoint workers dispatched + reaped, no crash"
 else
   no "run parallel spawn loop did not complete cleanly"

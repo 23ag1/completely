@@ -127,6 +127,19 @@ Merge-slot is still the safety net at COMMIT time for rare cross-zone file colli
 whose declared zones don't overlap but happen to both touch a file at land time); the dispatcher
 covers the common case at SPAWN time.
 
+## Run-report — the loop never lies about "done" (`cmpl run`)
+
+On EVERY exit (queue drained / wall-clock stall / `--max`) the loop prints a **run-report** with an
+honest verdict:
+- **DONE** only if `bd ready` is empty AND there are **zero `in_progress` orphans** AND the tree is
+  **clean**. Otherwise **STOPPED — INCOMPLETE**, listing the orphaned beads (a worker that died or
+  was killed without closing — reset with `bd update <id> --status open`) and the uncommitted files.
+- It also reports: tasks closed this run, blocked count, stop reason, approximate spend.
+
+This kills the overnight-run trap — the loop stopping with orphans + a dirty tree while a near-empty
+`bd ready` *looks* finished. `cmpl run --self-test` Case 10 drives the real loop against a worker
+that dies mid-run and asserts the report flags the orphan + reports INCOMPLETE (negative control).
+
 ## control vs auto — same engine
 
 - **control** runs steps 0–10 for the SINGLE next `bd ready` task, in this session, showing each
