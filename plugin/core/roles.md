@@ -12,6 +12,14 @@ Pick one owner per concern. Reference split:
 | Always-on enforcement | **hooks** (format/lint/types/dangerous-cmd) | CLAUDE.md (advisory only) |
 | Independent judgment | subagents (code-reviewer, security-reviewer, **evaluator**) | the implementer |
 
+> **Reviewers judge more than the diff.** The **code-reviewer** owns code merits **AND project-wide
+> fit** — duplication vs existing shared utilities, adherence to the architecture preset (layering,
+> module boundaries, public-API surface), naming/pattern consistency with neighbouring modules, and
+> cross-module ripple. The **security-reviewer** owns the injection/authz/secret/validation surface.
+> Green tests + clean lint are NECESSARY, NOT SUFFICIENT: a clear project-level problem blocks the
+> task even with a passing suite (fix it or `bd update --status blocked`). This is enforced at spawn —
+> `<<COMPLETELY_ENFORCED step=review policy=project-fit>>` / `policy=security`.
+
 ## Three conflicts to resolve explicitly
 
 1. **Two execution drivers** (e.g. a phase executor vs a Ralph-style loop). → **One per run.**

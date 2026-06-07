@@ -66,7 +66,15 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
    `<<COMPLETELY_ENFORCED step=review policy=security>>` into the worker's prompt at spawn, listing
    the diff-trigger surfaces (input handling, authn/authz, secrets, interpolation, deserialization,
    file/URL ingestion, crypto, sandbox boundaries) and treating CRITICAL/HIGH findings as blocking.
-   Trace with `cmpl run --show-prompt <task-id>`. Self-test: `cmpl run --self-test` asserts both
+   **Green tests + clean lint are NECESSARY, NOT SUFFICIENT.** The code-reviewer must judge the code
+   ITSELF *and* its **project-wide** fit — not just the task diff. This too is **ENFORCED** (injected
+   `<<COMPLETELY_ENFORCED step=review policy=project-fit>>`): give the reviewer the task `read_context`,
+   the architecture rules/preset, and the neighbouring modules the change touches, and have it report
+   project-level findings — **duplication** of an existing shared utility, **architecture drift**
+   (layering/boundary/public-API violations), naming/pattern **inconsistency** with neighbours, and
+   **cross-module ripple** — as BLOCKING. A passing suite over a project-wide problem is not a pass;
+   fix it here or `bd update --status blocked` with the finding quoted.
+   Trace with `cmpl run --show-prompt <task-id>`. Self-test: `cmpl run --self-test` asserts the
    enforced blocks appear in the worker prompt in the correct order (dispatch → plan-check → review).
 
 7. **VERIFY (goal + acceptance).** **gsd-verifier**: did it achieve the GOAL (not just "tasks

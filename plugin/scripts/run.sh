@@ -185,6 +185,21 @@ as BLOCKING: fix in this task, or `bd update --status blocked` with the finding 
 Do NOT paraphrase its verdict — quote the relevant findings on the bead in STEP 9 (LAND).
 <<END_ENFORCED>>'
 
+ENFORCED_REVIEW_FIT='<<COMPLETELY_ENFORCED step=review policy=project-fit>>
+At STEP 6 (REVIEW), green tests + clean lint are NECESSARY, NOT SUFFICIENT. Spawn the
+**code-reviewer** to judge the CODE ITSELF and its fit with the WHOLE PROJECT (project-wide),
+not just the task diff passing tests. Give it the context to do so: this task'\''s read_context,
+the architecture rules/preset, and the neighbouring modules the change touches. It MUST report
+project-level findings, treated as BLOCKING:
+  · duplication — re-implements an existing shared utility/helper instead of reusing it;
+  · architecture drift — violates the project preset (layering, module boundaries, public-API surface);
+  · inconsistency — naming / patterns / error-handling out of step with neighbouring code;
+  · cross-module ripple — silently forces or breaks callers elsewhere.
+A clear project-level problem is a stop-condition even with a green suite: fix it in this task, or
+`bd update --status blocked` with the finding quoted. A passing test over a project-wide problem is
+NOT a pass.
+<<END_ENFORCED>>'
+
 ENFORCED_VERIFY='<<COMPLETELY_ENFORCED step=verify policy=path-exercised>>
 At STEP 7 (VERIFY) your evidence MUST exercise the real runtime path, not a proxy.
 Tests-green != failing-path-exercised: a passing unit, a --dry-run, or a mock at the wrong layer
@@ -233,6 +248,7 @@ if isinstance(rc,list): print("\n".join("  "+str(x) for x in rc if str(x).strip(
   printf '<<END_DISPATCH>>\n\n'
   printf '%s\n\n' "$ENFORCED_PLAN_CHECK"
   printf '%s\n\n' "$ENFORCED_SECURITY"
+  printf '%s\n\n' "$ENFORCED_REVIEW_FIT"
   printf '%s\n\n' "$ENFORCED_VERIFY"
   cat "$PROMPT"
 }

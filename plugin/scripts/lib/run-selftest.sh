@@ -90,6 +90,10 @@
     'security-reviewer' \
     'CRITICAL' \
     'BLOCKING' \
+    'policy=project-fit' \
+    'project-wide' \
+    'duplication' \
+    'architecture drift' \
     '<<COMPLETELY_ENFORCED step=verify' \
     'policy=path-exercised' \
     'real runtime path' \
