@@ -17,6 +17,7 @@ Arms (built-in):
 Mock seam (tests, NO LLM spend): set CMP_BENCH_CMD to a command run for EVERY arm; it works in the
 per-run worktree (cwd), reads BENCH_PROMPT, and writes a result JSON to BENCH_COST.
 """
+
 import argparse
 import glob
 import json
@@ -29,8 +30,9 @@ import tempfile
 
 
 def sh(cmd, cwd=None, env=None, capture=False):
-    return subprocess.run(["bash", "-c", cmd], cwd=cwd, env=env,
-                          capture_output=capture, text=True)
+    return subprocess.run(
+        ["bash", "-c", cmd], cwd=cwd, env=env, capture_output=capture, text=True
+    )
 
 
 def load_tasks(tasks_dir):
@@ -75,19 +77,36 @@ def parse_cost(path):
     return agg
 
 
-def run_arm(arm, prompt, workdir, cost_path):
+def run_arm(arm, prompt, workdir, cost_path, rtk_on=False):
+    # rtk dimension (OPTIONAL token-economy input lever): when rtk_on=True we set CMP_RTK=1 in the
+    # subprocess env. Downstream wrappers (rtk shell aliases set in the agent's shell init) can
+    # see it and route dev commands through `rtk wrap …`. completely's own gate cmds (cmpl check /
+    # cmpl lint) are NEVER wrapped — see token-economy.md and the gate-parser-safety contract test
+    # (which proves byte-equal output for `cmpl check` whether rtk is "active" or not).
     env = {**os.environ, "BENCH_PROMPT": prompt, "BENCH_COST": cost_path}
+    if rtk_on:
+        env["CMP_RTK"] = "1"
+    else:
+        env.pop("CMP_RTK", None)
     override = os.environ.get("CMP_BENCH_CMD")
-    if override:                                   # mock seam — same runner for every arm
+    if override:  # mock seam — same runner for every arm
         sh(override, cwd=workdir, env=env)
         return
     if arm == "raw":
         claude = os.environ.get("CMP_CLAUDE_CMD", "claude -p --output-format json")
-        sh(f'printf %s "$BENCH_PROMPT" | {claude} > {shlex.quote(cost_path)}', cwd=workdir, env=env)
+        sh(
+            f'printf %s "$BENCH_PROMPT" | {claude} > {shlex.quote(cost_path)}',
+            cwd=workdir,
+            env=env,
+        )
     elif arm == "completely":
-        env["CMP_BENCH_LOG"] = cost_path           # run.sh appends each inner claude JSON here
+        env["CMP_BENCH_LOG"] = cost_path  # run.sh appends each inner claude JSON here
         if os.path.isdir(os.path.join(workdir, ".beads")):
-            sh(f'bd create {shlex.quote(prompt[:72])} -t task --json >/dev/null 2>&1', cwd=workdir, env=env)
+            sh(
+                f"bd create {shlex.quote(prompt[:72])} -t task --json >/dev/null 2>&1",
+                cwd=workdir,
+                env=env,
+            )
         sh("cmpl auto --max 1", cwd=workdir, env=env)
     else:
         print(f"bench: unknown arm '{arm}'", file=sys.stderr)
@@ -115,7 +134,9 @@ def judge(judges, workdir):
             if not hit:
                 return False
         else:
-            print(f"bench: unknown judge type '{t}' — treating as fail", file=sys.stderr)
+            print(
+                f"bench: unknown judge type '{t}' — treating as fail", file=sys.stderr
+            )
             return False
     return True
 
@@ -128,10 +149,17 @@ def main():
     ap.add_argument("--model", default=os.environ.get("CMP_BENCH_MODEL", ""))
     ap.add_argument("--base", default="")
     ap.add_argument("--out", default="bench/results.csv")
+    ap.add_argument(
+        "--rtk",
+        default="off",
+        help="rtk dimension: 'off' | 'on' | 'off,on' (input-token compaction lever; "
+        "gate cmds excluded by construction — see token-economy.md).",
+    )
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
     arms = [x for x in a.arms.split(",") if x]
+    rtk_dim = [v for v in a.rtk.split(",") if v in ("on", "off")] or ["off"]
     base_repo = os.getcwd()
     if sh("git rev-parse --git-dir", cwd=base_repo, capture=True).returncode != 0:
         print("bench: not a git repo (worktree isolation needs git)", file=sys.stderr)
@@ -146,28 +174,61 @@ def main():
         name = task.get("name") or os.path.basename(tpath)
         base = a.base or task.get("base") or "HEAD"
         for arm in arms:
-            for r in range(1, a.repeats + 1):
-                if a.dry_run:
-                    print(f"  [dry-run] {name} arm={arm} run={r} base={base}")
-                    continue
-                wt = tempfile.mkdtemp(prefix="benchwt.")
-                cost_path = os.path.join(tempfile.gettempdir(), f"benchcost.{name}.{arm}.{r}.{os.getpid()}")
-                open(cost_path, "w").close()
-                sh(f"git worktree add --detach {shlex.quote(wt)} {shlex.quote(base)}",
-                   cwd=base_repo, capture=True)
-                try:
-                    run_arm(arm, task.get("prompt", ""), wt, cost_path)
-                    passed = judge(task.get("judge"), wt)
-                    c = parse_cost(cost_path)
-                    rows.append([arm, name, r, f'{c["cost"]:.6g}', c["in"], c["out"],
-                                 c["turns"], c["dur"], 1 if passed else 0])
-                    print(f"  {name} arm={arm} run={r}: {'PASS' if passed else 'FAIL'}  ${c['cost']:.4f}")
-                finally:
-                    sh(f"git worktree remove --force {shlex.quote(wt)}", cwd=base_repo, capture=True)
+            for rtk_v in rtk_dim:
+                for r in range(1, a.repeats + 1):
+                    if a.dry_run:
+                        print(
+                            f"  [dry-run] {name} arm={arm} rtk={rtk_v} run={r} base={base}"
+                        )
+                        continue
+                    wt = tempfile.mkdtemp(prefix="benchwt.")
+                    cost_path = os.path.join(
+                        tempfile.gettempdir(),
+                        f"benchcost.{name}.{arm}.rtk{rtk_v}.{r}.{os.getpid()}",
+                    )
+                    open(cost_path, "w").close()
+                    sh(
+                        f"git worktree add --detach {shlex.quote(wt)} {shlex.quote(base)}",
+                        cwd=base_repo,
+                        capture=True,
+                    )
                     try:
-                        os.remove(cost_path)
-                    except OSError:
-                        pass
+                        run_arm(
+                            arm,
+                            task.get("prompt", ""),
+                            wt,
+                            cost_path,
+                            rtk_on=(rtk_v == "on"),
+                        )
+                        passed = judge(task.get("judge"), wt)
+                        c = parse_cost(cost_path)
+                        arm_label = f"{arm}+rtk" if rtk_v == "on" else arm
+                        rows.append(
+                            [
+                                arm_label,
+                                name,
+                                r,
+                                f"{c['cost']:.6g}",
+                                c["in"],
+                                c["out"],
+                                c["turns"],
+                                c["dur"],
+                                1 if passed else 0,
+                            ]
+                        )
+                        print(
+                            f"  {name} arm={arm_label} run={r}: {'PASS' if passed else 'FAIL'}  ${c['cost']:.4f}"
+                        )
+                    finally:
+                        sh(
+                            f"git worktree remove --force {shlex.quote(wt)}",
+                            cwd=base_repo,
+                            capture=True,
+                        )
+                        try:
+                            os.remove(cost_path)
+                        except OSError:
+                            pass
     if a.dry_run:
         return 0
 
@@ -179,15 +240,26 @@ def main():
 
     # summary: per arm — runs, passed, pass%, total $, $/passed (the honest metric)
     print(f"\nbench summary  ({a.out})")
-    print(f"  {'arm':<14}{'runs':>5}{'passed':>8}{'pass%':>7}{'total$':>10}{'$/passed':>11}")
-    for arm in arms:
-        ar = [x for x in rows if x[0] == arm]
+    print(
+        f"  {'arm':<14}{'runs':>5}{'passed':>8}{'pass%':>7}{'total$':>10}{'$/passed':>11}"
+    )
+    # arm labels include the rtk dim ("arm" vs "arm+rtk") so each combo gets its own summary row.
+    # Note: do NOT use `a` as the comprehension loop var — it shadows `a = ap.parse_args()` above.
+    arm_labels = list(arms) + (
+        [f"{lbl}+rtk" for lbl in arms] if "on" in rtk_dim else []
+    )
+    seen = set()
+    arm_labels = [lbl for lbl in arm_labels if not (lbl in seen or seen.add(lbl))]
+    for arm_label in arm_labels:
+        ar = [x for x in rows if x[0] == arm_label]
         n = len(ar)
         p = sum(1 for x in ar if x[8] == 1)
         tot = sum(float(x[3]) for x in ar)
         per = (tot / p) if p else 0.0
         pct = (100 * p // n) if n else 0
-        print(f"  {arm:<14}{n:>5}{p:>8}{pct:>6}%{tot:>10.4f}{(f'{per:.4f}' if p else 'n/a'):>11}")
+        print(
+            f"  {arm_label:<14}{n:>5}{p:>8}{pct:>6}%{tot:>10.4f}{(f'{per:.4f}' if p else 'n/a'):>11}"
+        )
     return 0
 
 

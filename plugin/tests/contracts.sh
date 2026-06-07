@@ -403,6 +403,66 @@ done
 bash "$CT_HOOK" --self-test >/dev/null 2>&1 && ok "cost-tracker --self-test green" || no "cost-tracker --self-test FAILED"
 rm -rf "$CT_DIR"
 
+echo "== rtk: OPTIONAL upstream wired in bootstrap (present/hint/install/OPTIONAL list) =="
+grep -q '    rtk)' "$ROOT/scripts/bootstrap.sh" && grep -qE 'OPTIONAL=.*rtk' "$ROOT/scripts/bootstrap.sh" \
+  && ok "bootstrap: rtk in present/hint/install_one + OPTIONAL list" \
+  || no "bootstrap: rtk wiring missing"
+
+echo "== rtk: pinned in versions.lock =="
+grep -qE '^rtk=' "$ROOT/versions.lock" && ok "versions.lock pins rtk= (doctor reports drift if installed != tested)" \
+  || no "versions.lock missing rtk= pin"
+
+echo "== rtk: doctor.sh handles drift with narrow affected scope (gate cmds excluded) =="
+grep -q '  rtk)' "$ROOT/scripts/doctor.sh" && grep -qi 'excluded\|bench --rtk' "$ROOT/scripts/doctor.sh" \
+  && ok "doctor.sh: rtk case present + narrow scope language (no gate-cmd impact)" \
+  || no "doctor.sh: missing rtk case or scope language"
+
+echo "== rtk: bench --rtk on/off dimension exposed =="
+python3 "$ROOT/scripts/bench.py" --help 2>&1 | grep -q -- '--rtk' \
+  && ok "bench.py: --rtk flag exposed" || no "bench.py: --rtk flag missing"
+
+echo "== rtk: gate-parser safety (cmpl check byte-equal w/ rtk active vs absent) + negative control =="
+# Build a mock 'rtk' that, when invoked as `rtk wrap CMD…`, truncates output to the first 3 lines.
+# Truncation is deterministic and visibly mangling — so the negative control bites.
+MD=$(mktemp -d /tmp/cmprtkmock.XXXXXX)
+cat > "$MD/rtk" <<'RTK'
+#!/usr/bin/env bash
+case "${1:-}" in
+  wrap)        shift; "$@" 2>&1 | sed -n '1,3p' ;;
+  init|--version|version) printf "rtk mock 0.1.0\n"; exit 0 ;;
+  *)           exec "$@" ;;
+esac
+RTK
+chmod +x "$MD/rtk"
+# Minimal cmpl check workspace — enough commands that truncation to 3 lines is observable.
+CD=$(mktemp -d /tmp/cmprtkcheck.XXXXXX)
+cat > "$CD/completely.toml" <<'TOML'
+[check]
+commands = [
+  { name = "a", cmd = "echo line-a" },
+  { name = "b", cmd = "echo line-b" },
+  { name = "c", cmd = "echo line-c" },
+  { name = "d", cmd = "echo line-d" },
+]
+TOML
+# (1) BASELINE: cmpl check with NO mock rtk on PATH, no CMP_RTK.
+OUT_BASE=$(bash "$ROOT/scripts/check.sh" "$CD" 2>&1)
+# (2) GATE-SAFETY: cmpl check with mock rtk on PATH + CMP_RTK=1.
+# Output MUST be byte-identical to baseline — proving cmpl check does NOT route through rtk.
+OUT_RTK=$(PATH="$MD:$PATH" CMP_RTK=1 bash "$ROOT/scripts/check.sh" "$CD" 2>&1)
+[ "$OUT_BASE" = "$OUT_RTK" ] \
+  && ok "gate-parser safety: cmpl check output BYTE-EQUAL with rtk active vs absent (exclusion holds)" \
+  || no "gate-parser safety FAILED — rtk leaked into cmpl check parser"
+# (3) NEGATIVE CONTROL: bypass the exclusion by actively wrapping check through the mock rtk.
+# OUT_NEG must DIFFER from OUT_BASE — proving the mock actually corrupts and the (2) assertion bites.
+# Invoke the mock rtk by ABSOLUTE PATH ("$MD/rtk") — relying on PATH lookup here would silently
+# resolve to a host-installed rtk (or to nothing) and the test would pass for the wrong reason.
+OUT_NEG=$("$MD/rtk" wrap bash "$ROOT/scripts/check.sh" "$CD" 2>&1)
+[ "$OUT_NEG" != "$OUT_BASE" ] \
+  && ok "negative control bites: rtk wrap of cmpl check IS corrupting (truncation observable)" \
+  || no "negative control vacuous — mock rtk didn't corrupt (gate-safety test doesn't bite)"
+rm -rf "$MD" "$CD"
+
 echo "== live-agent contracts =="
 skip "orchestrator builds parallel-decomposition matrix before delegating"
 skip "two independent streams actually spawn in parallel"

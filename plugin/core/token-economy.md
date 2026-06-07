@@ -20,8 +20,13 @@ Load the least context that still produces the right outcome.
   when absent. Routed via `cmpl craft`; listed alongside other optional upstreams in `cmpl setup`.
   - **rtk** (the bigger lever — input). Wraps dev commands (git/pytest/ruff/grep) and compresses
     their output *before* the agent reads it. Local, no key.
-    ⚠️ Rewrites command output — keep it away from gate parsers (`cmpl check`/`lint`) or verify they
-    still parse. Quantify any saving with `cmpl bench` (rtk on/off), never assume.
+    Install via `cmpl setup --install` (offered as OPTIONAL alongside gsd/claude-mem/ralph; per-project
+    `rtk init` runs automatically on install) — pinned in `versions.lock` so `cmpl doctor` surfaces drift.
+    ⚠️ Rewrites command output — **gate cmds (`cmpl check` / `cmpl lint`) are excluded by construction**:
+    completely never injects rtk into its own gate invocation chain, and the
+    `plugin/tests/contracts.sh` "gate-parser safety" test proves their output is byte-identical with
+    or without rtk active (with a negative-control variant that breaks the exclusion to prove the
+    test bites). Quantify any saving with `cmpl bench --rtk on,off`, never assume.
   - **caveman** (the smaller lever — output). Keeps the agent's own output terse. Local, no key.
     The *principle* (no preamble, no trailing summary, evidence > prose) is **baked into the worker
     overlay** (overlays/ralph/PROMPT_build.completely.md) and applies whether or not `/caveman` is

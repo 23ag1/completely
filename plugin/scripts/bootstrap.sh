@@ -32,6 +32,7 @@ present() {  # echo version if installed, empty if absent (CMP_FAKE_MISSING forc
     gsd)        cat "$HOME/.claude/gsd-core/VERSION" 2>/dev/null ;;
     ralph)      git -C "$HOME/.claude/ralph-loop" rev-parse --short HEAD 2>/dev/null ;;
     claude-mem) ls "$HOME/.claude/plugins/cache/thedotmack/claude-mem" 2>/dev/null | sort -V | tail -1 ;;
+    rtk)        command -v rtk >/dev/null 2>&1 && rtk --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
   esac
 }
 hint() {
@@ -40,6 +41,7 @@ hint() {
     gsd)        echo "npx --yes @opengsd/gsd-core@latest --claude --global  (open-gsd, npm)" ;;
     ralph)      echo "claude plugin install ralph-loop@claude-plugins-official" ;;
     claude-mem) echo "claude plugin install claude-mem@thedotmack" ;;
+    rtk)        echo "claude plugin install rtk@claude-plugins-official  (OPTIONAL token-economy lever; local, no key)" ;;
   esac
 }
 run() { if [ "$DRY" = 1 ]; then echo "    [dry-run] $*"; else echo "    \$ $*"; eval "$@"; fi; }
@@ -60,11 +62,26 @@ install_one() {
     gsd)
       if command -v npx >/dev/null 2>&1; then run "npx --yes @opengsd/gsd-core@latest --claude --global"
       else echo "    npx (node) not found → $(hint gsd)"; fi ;;
+    rtk)
+      # rtk is an OPTIONAL token-economy lever (input-side: compresses tool output before the agent
+      # reads it). Local, no key. After install we run `rtk init` in the target project so its
+      # per-project config exists — guarded by `command -v rtk`, so it's a no-op if rtk isn't on PATH
+      # after install (e.g. plugin CLI not yet linked). NEVER touches `cmpl check` / `cmpl lint`
+      # invocations — those bypass rtk by construction (see token-economy.md "gate cmds excluded").
+      if command -v claude >/dev/null 2>&1; then run "claude plugin install rtk@claude-plugins-official"
+      else echo "    claude CLI not found → $(hint rtk)"; fi
+      if command -v rtk >/dev/null 2>&1 && [ "$DRY" != 1 ]; then
+        ( cd "$PROJECT" 2>/dev/null && rtk init >/dev/null 2>&1 ) \
+          && echo "    rtk: per-project config initialized in $PROJECT" \
+          || echo "    rtk: 'rtk init' skipped (project=$PROJECT — run manually if needed)"
+      fi ;;
   esac
 }
 
 REQUIRED="bd"
-OPTIONAL="gsd claude-mem ralph"
+# rtk joins the OPTIONAL set — installing it never changes the harness contract; gate cmds
+# (cmpl check/lint) are excluded from rtk wrapping by construction so absence is a no-op.
+OPTIONAL="gsd claude-mem ralph rtk"
 
 # ensure completely AUTO-UPDATES for this user: register its marketplace with autoUpdate=true
 # (third-party marketplaces default to auto-update OFF, so we opt in explicitly via the NATIVE

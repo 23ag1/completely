@@ -17,12 +17,16 @@ ver(){ case "$1" in
   gsd)        cat "$HOME/.claude/gsd-core/VERSION" 2>/dev/null ;;
   ralph)      git -C "$HOME/.claude/ralph-loop" rev-parse --short HEAD 2>/dev/null ;;
   claude-mem) ls "$HOME/.claude/plugins/cache/thedotmack/claude-mem" 2>/dev/null | sort -V | tail -1 ;;
+  rtk)        command -v rtk >/dev/null 2>&1 && rtk --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
 esac; }
 affected(){ case "$1" in   # which completely components depend on this upstream
   gsd)        echo "emit (GSD PLAN.md parser)";;
   bd)         echo "sync, emit, lint, run (bd JSON fields)";;
   ralph)      echo "run unattended overlay";;
   claude-mem) echo "memory recall only";;
+  # rtk affects ONLY the rtk=on bench arm — gate cmds (cmpl check / cmpl lint) are excluded from rtk
+  # wrapping by construction, so drift here never quarantines the harness's gates. Narrow on purpose.
+  rtk)        echo "cmpl bench --rtk on (token-economy lever; gate cmds excluded)";;
 esac; }
 
 ok=0; warn=0; DRIFT=""
