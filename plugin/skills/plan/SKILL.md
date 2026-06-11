@@ -14,6 +14,13 @@ Plan **into Beads directly**. Do NOT write a `PLAN.md` / `STATE.md` — the plan
    `title` (imperative), `acceptance` (observable/testable), `design` (approach/why),
    `write_zone` (exact files/globs), `verify` (the proof command), `deps` (other task keys).
    ~2–3 tasks per unit; split if a unit exceeds ~5 tasks or ~10 files (context budget).
+   **Also fill the context fields — the engine consumes them directly:**
+   - `read_context` — the exact files/interfaces the worker must READ first but won't edit
+     (contracts, schemas, neighbouring patterns). Injected verbatim into the worker's dispatch
+     header, so a fresh context reads exactly this instead of guessing or scanning the tree.
+   - `must_haves` — the goal-backward checklist `{truths, artifacts, key_links}` the default-FAIL
+     evaluator grades against at VERIFY. No must_haves ⇒ the evaluator has only the acceptance line.
+   - `requirements` — requirement IDs this task covers (traceability), when the phase has them.
 3. **Checkpoints.** Where a human must verify/decide, add `{key,title,after,how}`; make downstream
    tasks depend on `cp:<key>` so the wave blocks until the human closes it.
 4. **Self-check (goal-backward, GSD plan-checker's 7 dimensions).** Before applying, verify:
@@ -25,7 +32,7 @@ Plan **into Beads directly**. Do NOT write a `PLAN.md` / `STATE.md` — the plan
    a `bd swarm` (native waves). Then show `bd ready` and `bd swarm status`.
 
 ## Plan JSON schema
-`{ "epic": "...", "tasks": [ {"key","title","acceptance","design","write_zone":[...],"verify","deps":[...],"labels":[...]} ], "checkpoints": [ {"key","title","after","how"} ] }`
+`{ "epic": "...", "tasks": [ {"key","title","acceptance","design","write_zone":[...],"verify","deps":[...],"labels":[...],"read_context":[...],"must_haves":{"truths":[...],"artifacts":[...],"key_links":[...]},"requirements":[...]} ], "checkpoints": [ {"key","title","after","how"} ] }`
 
 ## Rules
 - Beads is the only artifact. Never persist a markdown plan.

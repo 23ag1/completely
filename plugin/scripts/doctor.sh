@@ -47,6 +47,7 @@ DRIFT="$(echo "$DRIFT" | xargs 2>/dev/null || true)"
 if [ -n "$DRIFT" ]; then
   printf '%s\n' $DRIFT > "$QFILE"
   echo "doctor: $ok ok, $warn drift — quarantined: $DRIFT (affected commands need --force until re-tested)"
+  exit 1   # meaningful for automation: drift present (quarantine written); 0 = no drift
 else
   rm -f "$QFILE" 2>/dev/null || true
   echo "doctor: $ok ok, 0 drift — no quarantine"

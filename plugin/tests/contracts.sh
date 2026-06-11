@@ -348,13 +348,16 @@ fi
 rm -rf "$PD"
 
 echo "== doctor =="
-bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1 && ok "doctor runs" || no "doctor runs"
+bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1; dr=$?
+# 0 = no drift, 1 = drift (quarantine written) — both are a successful run; >1 = crash.
+if [ "$dr" -le 1 ]; then ok "doctor runs (exit $dr: 0=clean, 1=drift)"; else no "doctor crashed (exit $dr)"; fi
 
 echo "== doctor quarantine =="
 ST=$(mktemp -d /tmp/cmpqtXXXXXX)
 sed 's/^gsd=.*/gsd=0.0.0-FAKE/' "$ROOT/versions.lock" > "$ST/lock"
-CMP_LOCK="$ST/lock" CMP_STATE="$ST" bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1
+CMP_LOCK="$ST/lock" CMP_STATE="$ST" bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1; dqrc=$?
 grep -qx gsd "$ST/quarantine.txt" 2>/dev/null && ok "drift writes quarantine" || no "drift writes quarantine"
+[ "$dqrc" = 1 ] && ok "doctor exits 1 on drift (meaningful for automation)" || no "doctor drift exit code (got $dqrc, want 1)"
 DQ=$(mktmp)
 printf '# P\n<tasks>\n<task type="auto"><name>T</name><files>a</files><action>x</action><verify>v</verify><done>d</done></task>\n</tasks>\n' > "$DQ/P-PLAN.md"
 ( cd "$DQ" && CMP_STATE="$ST" bash "$ROOT/scripts/emit.sh" P-PLAN.md >/dev/null 2>&1 ); rc=$?

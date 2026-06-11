@@ -227,11 +227,33 @@ frontend: wire /run + /verify and screenshot (Playwright). No run / no observed 
 build_worker_prompt() {
   # $1 = task_id
   local tid="$1"
-  # 3jh: read-context — what to READ first to understand the task (write_zone is where to WRITE).
-  # A fresh `claude -p` has cleared context; without this it guesses which interfaces/contracts to
-  # read. Pulled from the bead's metadata.read_context (back-compat: read_first). Read-only — keeps
-  # build_worker_prompt a pure function (safe for --show-prompt / --self-test).
-  local rc
+  # Inline the FULL task contract from ONE bd show: acceptance/design/write_zone/verify/must_haves
+  # (the worker would otherwise spend a round-trip re-fetching them — and may skip it) plus the
+  # 3jh read-context (what to READ first; write_zone is where to WRITE). Read-only — keeps
+  # build_worker_prompt a pure function (safe for --show-prompt / --self-test); if bd is
+  # unavailable the sections are simply omitted and the worker falls back to `bd show`.
+  local contract rc
+  contract="$(bd show "$tid" --json 2>/dev/null | python3 -c '
+import sys,json
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+if isinstance(d,list): d=d[0] if d else {}
+elif isinstance(d,dict): d=d.get("issue") or d
+d=d or {}
+m=d.get("metadata") or {}
+out=[]
+if d.get("acceptance_criteria") or d.get("acceptance"):
+    out.append("Acceptance: "+str(d.get("acceptance_criteria") or d.get("acceptance")).strip())
+if d.get("design"):
+    out.append("Design: "+str(d["design"]).strip())
+if m.get("write_zone"):
+    out.append("Write-zone: "+json.dumps(m["write_zone"]))
+if m.get("verify"):
+    out.append("Verify: "+str(m["verify"]))
+if m.get("must_haves"):
+    out.append("Must-haves (evaluator checks these): "+json.dumps(m["must_haves"]))
+print("\n".join(out))
+' 2>/dev/null)"
   rc="$(bd show "$tid" --json 2>/dev/null | python3 -c '
 import sys,json
 try: d=json.load(sys.stdin)
@@ -245,8 +267,13 @@ if isinstance(rc,list): print("\n".join("  "+str(x) for x in rc if str(x).strip(
   printf '<<COMPLETELY_DISPATCH>>\n'
   printf 'Your assigned task: %s\n' "$tid"
   printf 'The parent has ALREADY claimed it for you (bd update %s --claim).\n' "$tid"
-  printf 'Skip the selection part of step 0 — read THIS task directly:\n'
-  printf '  bd show %s\n' "$tid"
+  if [ -n "$contract" ]; then
+    printf 'Your task contract (inlined — run `bd show %s` only for comments/history):\n' "$tid"
+    printf '%s\n' "$contract" | sed 's/^/  /'
+  else
+    printf 'Skip the selection part of step 0 — read THIS task directly:\n'
+    printf '  bd show %s\n' "$tid"
+  fi
   if [ -n "$rc" ]; then
     printf 'Before STEP 1 (UNDERSTAND), READ these first — the task read-context (interfaces/\n'
     printf 'contracts you must NOT guess; they sit outside your write-zone):\n%s\n' "$rc"
@@ -352,8 +379,12 @@ print(len(d if isinstance(d,list) else d.get("issues",[])))'; }
 # pipe the constructed prompt (dispatch header + enforced policy blocks + overlay) to stdin.
 spawn_worker() {
   # $1 = task_id  $2 = log_file_path
+  # CMP_WORKER_BEAD makes the deterministic gates task-aware INSIDE the worker session:
+  # guard-write-zone fences edits to this bead's write_zone, and lint/quality-gate resolve the
+  # worker's bead directly instead of the "exactly one in_progress" heuristic (broken under
+  # PARALLEL>1). Without this export those gates silently no-op in workers (audit finding).
   local tid="$1" log="$2"
-  build_worker_prompt "$tid" | $CLAUDE_CMD >"$log" 2>&1
+  build_worker_prompt "$tid" | CMP_WORKER_BEAD="$tid" $CLAUDE_CMD >"$log" 2>&1
 }
 
 # ---------- main loop: rolling parallel dispatch over `bd ready` ----------

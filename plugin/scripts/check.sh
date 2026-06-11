@@ -19,6 +19,7 @@ fi
 
 fail=0; total=0
 out="$(mktemp)"
+trap 'rm -f "$out"' EXIT
 while IFS=$'\t' read -r name cwd cmd; do
   [ -z "${name:-}" ] && continue
   total=$((total + 1))
