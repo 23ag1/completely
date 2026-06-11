@@ -18,6 +18,8 @@ there's one source of truth — not three. Short CLI: **`cmpl`**. Slash commands
 > deterministic contract is in `cmpl test` (**77 passing**); and during its own development its
 > default-FAIL evaluator caught a real over-graded task — and its loop caught a flagship crash that
 > shipped with a fully green test suite — *before* they could land.
+> Full incident log: **[Done is earned](docs/DONE-IS-EARNED.md)** — four real failures that shipped
+> "green" and the evaluator dimension each one forced.
 
 ---
 
