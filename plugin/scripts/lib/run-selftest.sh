@@ -99,6 +99,7 @@
     'real runtime path' \
     'negative control' \
     'USER-PERCEIVED correctness' \
+    'READ THE CODE ITSELF' \
     '<<END_ENFORCED>>' \
     '<<COMPLETELY_DISPATCH>>' \
     'Your assigned task: T1'; do

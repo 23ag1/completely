@@ -92,6 +92,31 @@ For each user-facing acceptance criterion, before flipping it PASS:
 This is **default-FAIL on experiential sanity**: green internals over a janky lived result is a
 REJECT, not an ACCEPT.
 
+## Code-Read — did you READ and judge the CODE ITSELF? (STANDARD step)
+
+Path-Exercised proves the path ran; User-Perceived proves it works for a user; this proves the code
+**is correct when you read it**. All the other dimensions can pass on code that is subtly wrong — a
+test that happens to be green, a path that runs, a demo that looks fine — while the diff hides an
+off-by-one, an inverted condition, a swallowed error, a wrong default, a race. You do NOT trust the
+tests, the **code-reviewer's** verdict, or the implementer's say-so: you read the actual diff
+(`git diff` / `git diff --staged`, already in Inputs) and re-derive its correctness yourself.
+
+For the changed code, line by line:
+1. **Trace the changed logic against the acceptance.** For each non-trivial change, follow the
+   control/data flow yourself — does it compute what the criterion requires for the normal case AND
+   the edges (empty / zero / None, boundary, error path, concurrency)? Name the lines you traced.
+2. **Hunt correctness defects tests don't cover:** inverted / off-by-one conditions, wrong operator,
+   swallowed exceptions (`except: pass`), missing `await`, unguarded None, resource leak, mutation of
+   a shared object, a default that fails OPEN, copy-paste left half-edited, a shell quoting / `set -u`
+   bug. A real defect in the path of a criterion keeps it **FAIL** even with a green suite.
+3. **You are the final backstop, independent of step 6.** The code-reviewer ran during BUILD; do not
+   inherit its verdict. If you can SEE a defect it missed, that is a FAIL with the `file:line` quoted.
+4. **A verdict without reading the changed code is itself a FAIL** ("code not read"). Quote the lines
+   you judged — "tests pass" is not a substitute for reading the implementation.
+
+This is **default-FAIL on code correctness**: criteria-met + path-ran + looks-fine, over code you can
+SEE is wrong, is a REJECT.
+
 ## Generic Definition of Done (used if no project DoD)
 - All acceptance criteria met IN FULL (not downscoped).
 - Tests exist, **run the real runtime path** (a negative control on that path goes RED), cover the

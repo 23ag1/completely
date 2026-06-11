@@ -7,8 +7,9 @@ Beads is the single source of truth — never track work in markdown.
 0. CLAIM: `bd ready --json` → highest-priority unblocked task → `bd update <id> --claim`. Read its
    acceptance, design, metadata.write_zone, metadata.verify. If the next ready item is a human gate
    (label `checkpoint`) → STOP (a human must close it). Stay inside the write-zone.
-1. UNDERSTAND: unfamiliar code → spawn gsd-codebase-mapper; unclear approach/new lib → spawn
-   gsd-phase-researcher (+ Context7). Don't guess.
+1. UNDERSTAND: FIRST `cmpl craft` → the stack-routed specialist list (reviewers, test runner,
+   architecture preset) for THIS repo. Then unfamiliar code → spawn gsd-codebase-mapper; unclear
+   approach/new lib → spawn gsd-phase-researcher (+ Context7). Don't guess.
 2. PLAN-CHECK (goal-backward): acceptance user-observable? deps ok? artifacts wired? scope sane?
    Too big/ambiguous → split via `cmpl plan-apply` or return blocked.
    **Query prior decisions FIRST** — run `bd query "type=decision"` (and a topic-scoped variant)

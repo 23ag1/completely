@@ -250,6 +250,16 @@ if CMP_RUN_PROMPT=/dev/null bash "$ROOT/scripts/run.sh" --show-prompt DEMO 2>/de
 else
   no "user-perceived not injected into worker prompt"
 fi
+if grep -qi 'Code-Read' "$ROOT/agents/evaluator.md" && grep -qi 'read .*code itself\|code not read' "$ROOT/agents/evaluator.md"; then
+  ok "evaluator.md has the Code-Read dimension (judge the code itself, code-not-read == FAIL)"
+else
+  no "evaluator.md missing Code-Read dimension"
+fi
+if CMP_RUN_PROMPT=/dev/null bash "$ROOT/scripts/run.sh" --show-prompt DEMO 2>/dev/null | grep -q 'READ THE CODE ITSELF'; then
+  ok "worker prompt injects Code-Read requirement at step=verify (evaluator reads the diff)"
+else
+  no "Code-Read not injected into worker prompt"
+fi
 
 echo "== run dispatcher (parallel disjoint / serial same-zone) =="
 if bash "$ROOT/scripts/run.sh" --self-test >/dev/null 2>&1; then

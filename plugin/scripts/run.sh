@@ -189,7 +189,8 @@ ENFORCED_REVIEW_FIT='<<COMPLETELY_ENFORCED step=review policy=project-fit>>
 At STEP 6 (REVIEW), green tests + clean lint are NECESSARY, NOT SUFFICIENT. Spawn the
 **code-reviewer** to judge the CODE ITSELF and its fit with the WHOLE PROJECT (project-wide),
 not just the task diff passing tests. Give it the context to do so: this task'\''s read_context,
-the architecture rules/preset, and the neighbouring modules the change touches. It MUST report
+the architecture rules/preset (completely'\''s presets: core/architectures.md + rules/file-organization.md;
+`cmpl craft` detects which applies), and the neighbouring modules the change touches. It MUST report
 project-level findings, treated as BLOCKING:
   · duplication — re-implements an existing shared utility/helper instead of reusing it;
   · architecture drift — violates the project preset (layering, module boundaries, public-API surface);
@@ -220,6 +221,11 @@ ALSO judge USER-PERCEIVED correctness: EXERCISE the artifact as a user would and
 do not infer it from the tests — CLI: run the command + read output; server: hit the endpoint;
 frontend: wire /run + /verify and screenshot (Playwright). No run / no observed behavior == FAIL
 (an assumed pass is not a pass); green internals over a janky lived result is a stop-condition.
+ALSO READ THE CODE ITSELF (Code-Read): the evaluator reads the diff and re-derives correctness — do
+not just grade criteria + run it. Trace the changed logic against the acceptance (normal + edges),
+hunt defects tests miss (inverted/off-by-one conditions, swallowed errors, fail-open defaults,
+races), independent of the code-reviewer. A defect you can SEE keeps the criterion FAIL even green; a
+verdict without reading the changed code is itself a FAIL.
 <<END_ENFORCED>>'
 
 # Build the exact stdin a worker will receive for a given task. Pure function — no Beads writes,
@@ -232,8 +238,9 @@ build_worker_prompt() {
   # 3jh read-context (what to READ first; write_zone is where to WRITE). Read-only — keeps
   # build_worker_prompt a pure function (safe for --show-prompt / --self-test); if bd is
   # unavailable the sections are simply omitted and the worker falls back to `bd show`.
-  local contract rc
-  contract="$(bd show "$tid" --json 2>/dev/null | python3 -c '
+  local raw contract rc
+  raw="$(bd show "$tid" --json 2>/dev/null)"   # ONE bd show; both parses read this (hot-path cost)
+  contract="$(printf '%s' "$raw" | python3 -c '
 import sys,json
 try: d=json.load(sys.stdin)
 except Exception: d=[]
@@ -252,9 +259,18 @@ if m.get("verify"):
     out.append("Verify: "+str(m["verify"]))
 if m.get("must_haves"):
     out.append("Must-haves (evaluator checks these): "+json.dumps(m["must_haves"]))
+if d.get("labels"):
+    out.append("Labels: "+", ".join(str(x) for x in d["labels"]))
+deps=d.get("dependencies") or []
+dl=[x for x in deps if isinstance(x,dict)]
+if dl:
+    names=", ".join(str(x.get("id"))+" ("+str(x.get("title"))+", "+str(x.get("status"))+")" for x in dl)
+    out.append("Depends on: "+names)
+    if any((x.get("status")=="closed") for x in dl):
+        out.append("  -> some deps are CLOSED: read what they produced (bd show <dep> + their commits) BEFORE building, so you integrate with them, not re-implement.")
 print("\n".join(out))
 ' 2>/dev/null)"
-  rc="$(bd show "$tid" --json 2>/dev/null | python3 -c '
+  rc="$(printf '%s' "$raw" | python3 -c '
 import sys,json
 try: d=json.load(sys.stdin)
 except Exception: d=[]
@@ -277,6 +293,10 @@ if isinstance(rc,list): print("\n".join("  "+str(x) for x in rc if str(x).strip(
   if [ -n "$rc" ]; then
     printf 'Before STEP 1 (UNDERSTAND), READ these first — the task read-context (interfaces/\n'
     printf 'contracts you must NOT guess; they sit outside your write-zone):\n%s\n' "$rc"
+  else
+    printf 'No read_context declared on this bead — before STEP 1, run `cmpl craft` for the\n'
+    printf 'stack-routed tools, then spawn gsd-codebase-mapper for any unfamiliar code in your\n'
+    printf 'write-zone. Do NOT guess interfaces you cannot edit.\n'
   fi
   printf 'Then proceed step 1 (UNDERSTAND) onward. Stay inside its write-zone.\n'
   printf 'If you cannot proceed: bd update %s --status blocked + a comment with the reason.\n' "$tid"

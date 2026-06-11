@@ -99,6 +99,13 @@ stack and names which specialist to invoke per concern — stack-agnostic, never
    observed behavior == FAIL**, never an assumed pass; vague (non-exercisable) acceptance is itself
    flagged. `cmpl run` injects this into the `step=verify` enforced block at spawn. See
    `plugin/agents/evaluator.md` (User-Perceived Correctness).
+   **Code-Read (enforced).** The evaluator also READS THE DIFF and judges the **code itself** — it
+   does not just grade criteria, run the path, and exercise as a user. Trace the changed logic against
+   the acceptance (normal case + edges), hunt correctness defects the tests don't cover (inverted/
+   off-by-one conditions, swallowed errors, fail-open defaults, races), independent of the
+   code-reviewer's verdict. A defect you can SEE keeps the criterion FAIL even with a green suite; a
+   verdict reached without reading the changed code is itself a FAIL. See `plugin/agents/evaluator.md`
+   (Code-Read).
 
 8. **DEBUG on failure.** Tests/checks fail repeatedly (≥3)? Spawn **gsd-debugger** (scientific
    method, persistent session) — don't thrash, don't disable the test.
