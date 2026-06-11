@@ -1,11 +1,11 @@
 {
   "name": "completely",
   "version": "0.11.0",
-  "description": "Quality-first agent harness: deterministic quality/security gates, a default-FAIL evaluator, a no-silent-stub contract, the `cmpl` CLI, and md→Beads sync. Unifies GSD/Ralph/Beads. Stack-agnostic.",
+  "description": "Quality-first harness for autonomous AI coding agents: deterministic gates + a default-FAIL evaluator in the close path of the loop, over a Beads task spine. Done is earned, not asserted. Unifies GSD + Beads; stack-agnostic.",
   "author": {
     "name": "23ag1",
     "email": "hasssanovvv@gmail.com"
   },
   "homepage": "https://github.com/23ag1/completely",
-  "keywords": ["harness", "quality-gate", "hooks", "tdd", "evaluator", "agent-workflow"]
+  "keywords": ["claude-code", "claude-code-plugin", "ai-coding-agent", "autonomous-coding", "ai-agent-harness", "agent-harness", "quality-gates", "default-fail-evaluator", "agent-evaluation", "agentic-coding", "beads", "gsd", "tdd", "developer-tools"]
 }
